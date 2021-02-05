@@ -358,7 +358,7 @@ if __name__ == '__main__':
     # import time
     # start_time = time.time()
     # for i in range(1000):
-    angle = inverse_with_lamda(x, r, -79, -1)  #TODO 查看公式，双输入反正切其实依赖角6，角2的sin
+    # angle = inverse_with_lamda(x, r, -79, -1)  #TODO 查看公式，双输入反正切其实依赖角6，角2的sin
     #- 0.5ms一次计算
     # print(time.time() - start_time)
     # ic(np.degrees(angle))
@@ -366,71 +366,71 @@ if __name__ == '__main__':
     # ic(x)
     # ic(r)   #TODO 多值引起的角度不匹配与解丢失
 
-    # phi_set = []
-    # joints = []
-    # joints2 = []
-    # real_phi = []
-    # real_phi2 = []
+    phi_set = []
+    joints = []
+    joints2 = []
+    real_phi = []
+    real_phi2 = []
 
-    # for phi in range(-80, -20, 2):
-    #     if phi == 90 or phi == 270:
-    #         continue
-    #     # angle = inverse_with_lamda(x, r, phi, -1)
-    #     # angle2 = inverse_with_lamda(x, r, phi, 1)
-    #     angle = inverse_kinematics(x, r, phi, -1)
-    #     angle2 = inverse_kinematics(x, r, phi, 1)
+    for phi in list(np.linspace(0, 360, 100)):
+        if phi == 90 or phi == 270:
+            continue
+        # angle = inverse_with_lamda(x, r, phi, -1)
+        # angle2 = inverse_with_lamda(x, r, phi, 1)
+        angle = inverse_kinematics(x, r, phi, -1)
+        angle2 = inverse_kinematics(x, r, phi, 1)
 
-    #     if angle is not None:
-    #         phi_set.append(phi)
-    #         joints.append(angle)
-    #         joints2.append(angle2)
-    #         real_phi.append(inverse_for_phi(x, r, phi, 1))
-    #         real_phi2.append(inverse_for_phi(x, r, phi, -1))
-    #         result = fk_kuka(angle)
-    #         show_error(result, phi, r, x)
-    # joints = np.array(joints)
-    # joints2 = np.array(joints2)
-    # real_phi = np.array(real_phi)
-    # real_phi2 = np.array(real_phi2)
-    # # reformulate angles
-    # for i in range(7):
-    #     for j in range(len(phi_set) - 1):
-    #         diff = joints[j+1, i] - joints[j, i]
-    #         if diff > 1.95 * pi:
-    #             joints[j+1, i] -= 2 * pi
-    #         elif diff < -1.95 * pi:
-    #             joints[j+1, i] += 2 * pi
+        if angle is not None:
+            phi_set.append(phi)
+            joints.append(angle)
+            joints2.append(angle2)
+            real_phi.append(inverse_for_phi(x, r, phi, 1))
+            real_phi2.append(inverse_for_phi(x, r, phi, -1))
+            result = fk_kuka(angle)
+            # show_error(result, phi, r, x)
+    joints = np.array(joints)
+    joints2 = np.array(joints2)
+    real_phi = np.array(real_phi)
+    real_phi2 = np.array(real_phi2)
+    # reformulate angles
+    for i in range(7):
+        for j in range(len(phi_set) - 1):
+            diff = joints[j+1, i] - joints[j, i]
+            if diff > 1.95 * pi:
+                joints[j+1, i] -= 2 * pi
+            elif diff < -1.95 * pi:
+                joints[j+1, i] += 2 * pi
 
-    # for i in range(7):
-    #     for j in range(len(phi_set) - 1):
-    #         diff = joints2[j+1, i] - joints2[j, i]
-    #         if diff > 1.95 * pi:
-    #             joints2[j+1, i] -= 2 * pi
-    #         elif diff < -1.95 * pi:
-    #             joints2[j+1, i] += 2 * pi
+    for i in range(7):
+        for j in range(len(phi_set) - 1):
+            diff = joints2[j+1, i] - joints2[j, i]
+            if diff > 1.95 * pi:
+                joints2[j+1, i] -= 2 * pi
+            elif diff < -1.95 * pi:
+                joints2[j+1, i] += 2 * pi
 
-    # np.save('route/impedence.npy', joints)
-    # # for j in range(len(phi_set) - 1):
-    # #     diff = real_phi[j+1] - real_phi[j]
-    # #     if diff > 1.95 * pi:
-    # #         real_phi[j+1] -= 2 * pi
-    # #     elif diff < -1.95 * pi:
-    # #         real_phi[j+1] += 2 * pi
+    np.save('route/impedence.npy', joints)
+    # for j in range(len(phi_set) - 1):
+    #     diff = real_phi[j+1] - real_phi[j]
+    #     if diff > 1.95 * pi:
+    #         real_phi[j+1] -= 2 * pi
+    #     elif diff < -1.95 * pi:
+    #         real_phi[j+1] += 2 * pi
 
-    # # for j in range(len(phi_set) - 1):
-    # #     diff = real_phi2[j+1] - real_phi2[j]
-    # #     if diff > 1.95 * pi:
-    # #         real_phi2[j+1] -= 2 * pi
-    # #     elif diff < -1.95 * pi:
-    # #         real_phi2[j+1] += 2 * pi
+    # for j in range(len(phi_set) - 1):
+    #     diff = real_phi2[j+1] - real_phi2[j]
+    #     if diff > 1.95 * pi:
+    #         real_phi2[j+1] -= 2 * pi
+    #     elif diff < -1.95 * pi:
+    #         real_phi2[j+1] += 2 * pi
 
-    # for i in range(7):
-    #     # plt.scatter(phi_set, np.degrees(joints[:, i]), label='joint {0}'.format(i+1), s=2)
-    #     # plt.scatter(phi_set, np.degrees(joints2[:, i]), label='joint2 {0}'.format(i+1), s=2)      
-    #     plt.plot(phi_set, np.degrees(joints[:, i]), label='joint {0}'.format(i+1))
-    #     # plt.plot(phi_set, np.degrees(joints2[:, i]), label='joint2 {0}'.format(i+1))
-    # plt.legend()
-    # plt.show()
+    for i in range(7):
+        # plt.scatter(phi_set, np.degrees(joints[:, i]), label='joint {0}'.format(i+1), s=2)
+        # plt.scatter(phi_set, np.degrees(joints2[:, i]), label='joint2 {0}'.format(i+1), s=2)      
+        plt.plot(phi_set, np.degrees(joints[:, i]), label='joint {0}'.format(i+1))
+        # plt.plot(phi_set, np.degrees(joints2[:, i]), label='joint2 {0}'.format(i+1))
+    plt.legend()
+    plt.show()
 
     # # plt.scatter(phi_set, np.degrees(real_phi), label='phi', s=2)
     # # plt.scatter(phi_set, np.degrees(real_phi2), label='phi2', s=2)

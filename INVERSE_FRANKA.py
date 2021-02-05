@@ -1,10 +1,11 @@
 import numpy as np
-from numpy import cos, sin
+from numpy import cos, sin, pi
 import matplotlib.pyplot as plt
 from icecream import ic
+from enum import Enum
+
 #/ FRANKA EMIKA 的反解
 
-pi = np.pi
 d_bs, d_se, d_ew, d_wt = 333, 316, 384, 107
 # * 机器人参数的输入
 offset = 88
@@ -25,9 +26,23 @@ def skew_vector(v):
                         [-v[1], v[0], 0]])
     return matrix
 
+class Branch(Enum):
+    #- 依次为solution_theta_4中正负根, 反正切, phi中反正弦
+    #TODO 实际上init_shoulder_joint也有分支,待完善,预计共有16个分支
+    BRANCH_ONE = [1, 1, 1]
+    BRANCH_TWO = [1, 1, -1]
+    BRANCH_THREE = [1, -1, 1]
+    BRANCH_FOUR = [1, -1, -1]
+    BRANCH_FIVE = [-1, 1, 1]
+    BRANCH_SIX = [-1, 1, -1]
+    BRANCH_SEVEN =  [-1, -1, 1]
+    BRANCH_EIGHT = [-1, -1, -1]
 
+list_branch = [item.value for item in Branch]
 
-def solution_theta_4(kesai, choice):
+def solution_theta_4(kesai, choice):   #!
+    choice_root = list_branch[choice-1][0]
+    choice_atan = list_branch[choice-1][1]
     k = bias
     b = d_se
     d = d_ew
@@ -36,12 +51,15 @@ def solution_theta_4(kesai, choice):
     a1 = 4 * k * (b+d)
     a0 = (d+b)**2 - kesai**2
 
-    up = -a1 + choice * np.sqrt(a1**2 - 4 * a0 * a2) 
-    down = 2 * a2
-    theta = -up/down
-    # print(np.arctan(theta) * 2)
-    # print(theta)
-    return np.arctan(theta) * 2 
+    delta_sqrt = a1**2 - 4 * a0 * a2
+    if delta_sqrt >= 0:
+        up = -a1 + choice_root * np.sqrt(delta_sqrt) 
+        down = 2 * a2
+        theta = -up/down
+        result = np.arctan(theta) * 2 
+        return result + (choice_atan - 1) * pi/2
+    else:
+        return None
 # * 关节i的旋转矩阵
 
 def rotation_axis(theta, index_joint):
@@ -84,7 +102,7 @@ def init_shoulder_joint(x, y):
 
     return theta_01, theta_02
 
-def inverse_with_phi(x, r, phi, p_bs, p_se, p_ew, p_wt, lamda):
+def inverse_with_phi(x, r, phi, p_bs, p_se, p_ew, p_wt, lamda, choice):
     cos_7 = np.cos(np.radians(lamda))
     sin_7 = np.sin(np.radians(lamda))
     len_0_bs = np.array([0, 0, p_bs])
@@ -94,88 +112,92 @@ def inverse_with_phi(x, r, phi, p_bs, p_se, p_ew, p_wt, lamda):
     x_0_sw = x - len_0_bs - r @ len_7_wt
 
     kesai = np.linalg.norm(x_0_sw) 
-    theta_4 = solution_theta_4(kesai, -1)  #/此处有分支
-    # theta_4 = solution_theta_4(kesai, -1) + pi  #/此处又有分支
-    omega = - theta_4 / 2
-    delta_d = np.tan(omega) * bias 
-    len_3_se = len_3_se_0 + np.array([0, delta_d, 0])
-    len_4_ew = len_4_ew_0 + np.array([0,  0, delta_d])
-
-    # ic(np.degrees(theta_4))
-    u_0_sw = x_0_sw / np.linalg.norm(x_0_sw)
-
-    x_for_calculation = rotation_axis(0, 3) @ (len_3_se + rotation_axis(theta_4, 4) @ len_4_ew)
-    y_for_calculation = x_0_sw
-    theta_1_ref, theta_2_ref = init_shoulder_joint(x_for_calculation, y_for_calculation)
-    r_03_ref = rotation_axis(theta_1_ref, 1) @ rotation_axis(theta_2_ref, 2) @ rotation_axis(0, 3)
-
-    cross_matrix_sw = skew_vector(u_0_sw)
-    A_s = cross_matrix_sw @ r_03_ref
-    B_s = - cross_matrix_sw @ cross_matrix_sw @ r_03_ref
-    C_s = np.array(np.matrix(u_0_sw).T @ np.matrix(u_0_sw)) @ r_03_ref
-    r_03 = A_s * sin(phi) + B_s * cos(phi) + C_s
-
-    #! 计算theta1,2,3, 多值
-    theta_1 = np.arctan2(r_03[1, 1] , r_03[0, 1])
-    theta_2 = np.arccos(r_03[2, 1])
-    theta_3 = np.arctan2(-r_03[2, 2] , -r_03[2, 0])
-
-    # 腕关节角计算
-    # 相应矩阵
-    A_w = rotation_axis(theta_4, 4).T @ A_s.T @ r
-    B_w = rotation_axis(theta_4, 4).T @ B_s.T @ r
-    C_w = rotation_axis(theta_4, 4).T @ C_s.T @ r
-
-    r_47 = A_w * sin(phi) + B_w * cos(phi) + C_w
-
-    #! 计算theta5,6,7, 由于角7给定，故角6的象限可以去确定，需要分类
-    if lamda != 90 and lamda != 270:
-        judgement = r_47[2, 0] * cos_7
+    theta_4 = solution_theta_4(kesai, choice)  #/此处有分支
+    if theta_4 is None:
+        return None
     else:
-        judgement = - r_47[2, 1] * sin_7
-    if judgement >= 0:  #- > 还是 >= 待定
-        theta_5 = np.arctan2(r_47[1, 2] ,r_47[0, 2])
-        theta_6 = np.arccos(-r_47[2, 2])
-        theta_7 = np.arctan2(-r_47[2, 1] ,r_47[2, 0])
-    else:
-        theta_5 = np.arctan2(-r_47[1, 2] ,-r_47[0, 2])
-        theta_6 = -np.arccos(-r_47[2, 2])
-        theta_7 = np.arctan2(r_47[2, 1] ,-r_47[2, 0])
-    # ic(np.tan(theta_7))
-    return np.array([theta_1, theta_2, theta_3, theta_4, theta_5, theta_6, theta_7])
+        omega = - theta_4 / 2
+        delta_d = np.tan(omega) * bias 
+        len_3_se = len_3_se_0 + np.array([0, delta_d, 0])
+        len_4_ew = len_4_ew_0 + np.array([0,  0, delta_d])
 
-def inverse_paramtric_matrix(x, r, p_bs, p_se, p_ew, p_wt):
+        # ic(np.degrees(theta_4))
+        u_0_sw = x_0_sw / np.linalg.norm(x_0_sw)
+
+        x_for_calculation = rotation_axis(0, 3) @ (len_3_se + rotation_axis(theta_4, 4) @ len_4_ew)
+        y_for_calculation = x_0_sw
+        theta_1_ref, theta_2_ref = init_shoulder_joint(x_for_calculation, y_for_calculation)
+        r_03_ref = rotation_axis(theta_1_ref, 1) @ rotation_axis(theta_2_ref, 2) @ rotation_axis(0, 3)
+
+        cross_matrix_sw = skew_vector(u_0_sw)
+        A_s = cross_matrix_sw @ r_03_ref
+        B_s = - cross_matrix_sw @ cross_matrix_sw @ r_03_ref
+        C_s = np.array(np.matrix(u_0_sw).T @ np.matrix(u_0_sw)) @ r_03_ref
+        r_03 = A_s * sin(phi) + B_s * cos(phi) + C_s
+
+        #! 计算theta1,2,3, 多值
+        theta_1 = np.arctan2(r_03[1, 1] , r_03[0, 1])
+        theta_2 = np.arccos(r_03[2, 1])
+        theta_3 = np.arctan2(-r_03[2, 2] , -r_03[2, 0])
+
+        # 腕关节角计算
+        # 相应矩阵
+        A_w = rotation_axis(theta_4, 4).T @ A_s.T @ r
+        B_w = rotation_axis(theta_4, 4).T @ B_s.T @ r
+        C_w = rotation_axis(theta_4, 4).T @ C_s.T @ r
+
+        r_47 = A_w * sin(phi) + B_w * cos(phi) + C_w
+
+        #! 计算theta5,6,7, 由于角7给定，故角6的象限可以去确定，需要分类
+        if lamda != 90 and lamda != 270:
+            judgement = r_47[2, 0] * cos_7
+        else:
+            judgement = - r_47[2, 1] * sin_7
+        if judgement >= 0:  #- > 还是 >= 待定
+            theta_5 = np.arctan2(r_47[1, 2] ,r_47[0, 2])
+            theta_6 = np.arccos(-r_47[2, 2])
+            theta_7 = np.arctan2(-r_47[2, 1] ,r_47[2, 0])
+        else:
+            theta_5 = np.arctan2(-r_47[1, 2] ,-r_47[0, 2])
+            theta_6 = -np.arccos(-r_47[2, 2])
+            theta_7 = np.arctan2(r_47[2, 1] ,-r_47[2, 0])
+        # ic(np.tan(theta_7))
+        return np.array([theta_1, theta_2, theta_3, theta_4, theta_5, theta_6, theta_7])
+
+def inverse_paramtric_matrix(x, r, p_bs, p_se, p_ew, p_wt, choice):
     len_0_bs = np.array([0, 0, p_bs])
     len_3_se_0 = np.array([0, p_se, 0])
     len_4_ew_0 = np.array([0, 0, p_ew])
     len_7_wt = np.array([0, 0, p_wt])
     x_0_sw = x - len_0_bs - r @ len_7_wt
     kesai = np.linalg.norm(x_0_sw) 
-    theta_4 = solution_theta_4(kesai, -1)  #/此处有分支
-    # theta_4 = solution_theta_4(kesai, -1) + pi  #/此处有分支
-    omega = - theta_4 / 2
-    delta_d = np.tan(omega) * bias 
-    len_3_se = len_3_se_0 + np.array([0, delta_d, 0])
-    len_4_ew = len_4_ew_0 + np.array([0,  0, delta_d])
+    theta_4 = solution_theta_4(kesai, choice)  #/此处有分支
+    if theta_4 is None:
+        return None
+    else:
+        omega = - theta_4 / 2
+        delta_d = np.tan(omega) * bias 
+        len_3_se = len_3_se_0 + np.array([0, delta_d, 0])
+        len_4_ew = len_4_ew_0 + np.array([0,  0, delta_d])  
 
-    u_0_sw = x_0_sw / np.linalg.norm(x_0_sw)
+        u_0_sw = x_0_sw / np.linalg.norm(x_0_sw)
 
-    x_for_calculation = rotation_axis(0, 3) @ (len_3_se + rotation_axis(theta_4, 4) @ len_4_ew)
-    y_for_calculation = x_0_sw
-    theta_1_ref, theta_2_ref = init_shoulder_joint(x_for_calculation, y_for_calculation)
-    r_03_ref = rotation_axis(theta_1_ref, 1) @ rotation_axis(theta_2_ref, 2) @ rotation_axis(0, 3)
+        x_for_calculation = rotation_axis(0, 3) @ (len_3_se + rotation_axis(theta_4, 4) @ len_4_ew)
+        y_for_calculation = x_0_sw
+        theta_1_ref, theta_2_ref = init_shoulder_joint(x_for_calculation, y_for_calculation)
+        r_03_ref = rotation_axis(theta_1_ref, 1) @ rotation_axis(theta_2_ref, 2) @ rotation_axis(0, 3)
 
-    cross_matrix_sw = skew_vector(u_0_sw)
-    A_s = cross_matrix_sw @ r_03_ref
-    B_s = - cross_matrix_sw @ cross_matrix_sw @ r_03_ref
-    C_s = np.array(np.matrix(u_0_sw).T @ np.matrix(u_0_sw)) @ r_03_ref
+        cross_matrix_sw = skew_vector(u_0_sw)
+        A_s = cross_matrix_sw @ r_03_ref
+        B_s = - cross_matrix_sw @ cross_matrix_sw @ r_03_ref
+        C_s = np.array(np.matrix(u_0_sw).T @ np.matrix(u_0_sw)) @ r_03_ref
 
-    # 腕关节角计算
-    # 相应矩阵
-    A_w = rotation_axis(theta_4, 4).T @ A_s.T @ r
-    B_w = rotation_axis(theta_4, 4).T @ B_s.T @ r
-    C_w = rotation_axis(theta_4, 4).T @ C_s.T @ r
-    return (A_w, B_w, C_w)
+        # 腕关节角计算
+        # 相应矩阵
+        A_w = rotation_axis(theta_4, 4).T @ A_s.T @ r
+        B_w = rotation_axis(theta_4, 4).T @ B_s.T @ r
+        C_w = rotation_axis(theta_4, 4).T @ C_s.T @ r
+        return (A_w, B_w, C_w)
 
 
 def phi_calculation_sqrt(lamda, M_w, choice):
@@ -202,6 +224,7 @@ def phi_calculation_sqrt(lamda, M_w, choice):
 def phi_calculation(lamda, M_w, choice):
     #- 采用此方法
     #/ 两种算法都可以,前一种容易避开奇异点，后一种更容易让结果连续
+    choice_phi = list_branch[choice-1][2]
     if lamda != 90 or lamda != 270:   #- 实际应该用同余判断
         upper = (M_w[0][2, 1], M_w[1][2, 1], M_w[2][2, 1])
         lower = (M_w[0][2, 0], M_w[1][2, 0], M_w[2][2, 0])
@@ -217,7 +240,7 @@ def phi_calculation(lamda, M_w, choice):
         gamma = np.arctan2(b, a)
         zeta = -c/d
         if np.abs(d) >= np.abs(c):
-            if choice == 1:
+            if choice_phi == 1:
                 phi = np.arcsin(zeta) - gamma
             else:
                 phi = np.pi - np.arcsin(zeta) - gamma  
@@ -235,11 +258,11 @@ def inverse_with_lamda(x, r, lamda, choice):
     beta = np.arctan(offset / d_wt) 
     sevenlink = np.sqrt(offset ** 2 + d_wt ** 2)
     r_srs = model_trans(r, beta, lamda)
-    M_w = inverse_paramtric_matrix(x, r_srs, d_bs, d_se, d_ew, sevenlink)
+    M_w = inverse_paramtric_matrix(x, r_srs, d_bs, d_se, d_ew, sevenlink, choice)
     if M_w is not None:
         phi = phi_calculation(lamda, M_w, choice)
         if phi is not None:
-            result = inverse_with_phi(x, r_srs, phi, d_bs, d_se, d_ew, sevenlink, lamda)
+            result = inverse_with_phi(x, r_srs, phi, d_bs, d_se, d_ew, sevenlink, lamda, choice)
             result[5] -= beta
             return result
         else:
@@ -253,7 +276,7 @@ def inverse_for_phi(x, r, lamda, choice):
     beta = np.arctan(offset / d_wt) 
     sevenlink = np.sqrt(offset ** 2 + d_wt ** 2)
     r_srs = model_trans(r, beta, lamda)
-    M_w = inverse_paramtric_matrix(x, r_srs, d_bs, d_se, d_ew, sevenlink)
+    M_w = inverse_paramtric_matrix(x, r_srs, d_bs, d_se, d_ew, sevenlink, choice)
     if M_w is not None:
         if lamda > 90 and lamda < 270:
             phi = phi_calculation(lamda, M_w, choice)
@@ -265,22 +288,22 @@ def inverse_for_phi(x, r, lamda, choice):
     else:
         return None
 
-def inverse_kinematics(x, r, lamda, branch):
-    #- 解的拼接
-    result_pos = inverse_with_lamda(x, r, lamda, 1)
-    result_neg = inverse_with_lamda(x, r, lamda, -1)
-    if result_pos is not None:
-        result_pos = normalize_theta_output(result_pos)
-        result_neg = normalize_theta_output(result_neg)
+# def inverse_kinematics(x, r, lamda, branch):
+#     #- 解的拼接
+#     result_pos = inverse_with_lamda(x, r, lamda, 1)
+#     result_neg = inverse_with_lamda(x, r, lamda, -1)
+#     if result_pos is not None:
+#         result_pos = normalize_theta_output(result_pos)
+#         result_neg = normalize_theta_output(result_neg)
 
-    if lamda > 90 and lamda < 270:
-        return result_neg if branch == 1 else result_pos
-    elif lamda != 90 and lamda != 270:
-        return result_pos if branch == 1 else result_neg
-    elif lamda == 90:
-        return result_pos if branch == 1 else result_neg
-    elif lamda == 270:
-        return result_neg if branch == 1 else result_pos
+#     if lamda > 90 and lamda < 270:
+#         return result_neg if branch == 1 else result_pos
+#     elif lamda != 90 and lamda != 270:
+#         return result_pos if branch == 1 else result_neg
+#     elif lamda == 90:
+#         return result_pos if branch == 1 else result_neg
+#     elif lamda == 270:
+#         return result_neg if branch == 1 else result_pos
 
 def mdh_mat(theta, d, a, alpha):
     '''分别是dh参数的a d theta alpha'''
@@ -350,7 +373,7 @@ if __name__ == '__main__':
     #                 [-0.354, 0.354, -0.866]])
     # x = x_07_d
     # r = r_07_d
-    reference = fk_kuka([-27, 50, 57, -98, 69, 131, -79])
+    reference = fk_kuka(np.radians([-27, 50, 57, -98, 69, 131, -79]))
     x = reference[:3, 3]
     r = reference[:3, :3]
 
@@ -362,30 +385,26 @@ if __name__ == '__main__':
 
     phi_set = []
     joints = []
-    joints2 = []
     real_phi = []
-    real_phi2 = []
 
-    for phi in range(-80, -50, 2):
+    for phi in list(np.linspace(-180, 180, 700)):
         if phi == 90 or phi == 270:
             continue
         # angle = inverse_with_lamda(x, r, phi, -1)
         # angle2 = inverse_with_lamda(x, r, phi, 1)
-        angle = inverse_kinematics(x, r, phi, 1)
-        angle2 = inverse_kinematics(x, r, phi, -1)
+        # angle = inverse_kinematics(x, r, phi, 1)
+        angle = inverse_with_lamda(x, r, phi, 6)
+        #- 实例角度位于分支6, 分支1,2,5,6曲线较好,此例子中5,6符合franka的角度限制
 
         if angle is not None:
             phi_set.append(phi)
             joints.append(angle)
-            joints2.append(angle2)
             real_phi.append(inverse_for_phi(x, r, phi, 1))
-            real_phi2.append(inverse_for_phi(x, r, phi, -1))
-            # result = fk_kuka(angle2)
+            # result = fk_kuka(angle)
             # show_error(result, phi, r, x)
     joints = np.array(joints)
-    joints2 = np.array(joints2)
     real_phi = np.array(real_phi)
-    real_phi2 = np.array(real_phi2)
+
     # reformulate angles
     for i in range(7):
         for j in range(len(phi_set) - 1):
@@ -394,14 +413,7 @@ if __name__ == '__main__':
                 joints[j+1, i] -= 2 * pi
             elif diff < -1.95 * pi:
                 joints[j+1, i] += 2 * pi
-
-    for i in range(7):
-        for j in range(len(phi_set) - 1):
-            diff = joints2[j+1, i] - joints2[j, i]
-            if diff > 1.95 * pi:
-                joints2[j+1, i] -= 2 * pi
-            elif diff < -1.95 * pi:
-                joints2[j+1, i] += 2 * pi
+    np.save('route/impedence.npy', joints)
 
     # for j in range(len(phi_set) - 1):
     #     diff = real_phi[j+1] - real_phi[j]
@@ -418,10 +430,8 @@ if __name__ == '__main__':
     #         real_phi2[j+1] += 2 * pi
 
     for i in range(7):
-        # plt.scatter(phi_set, np.degrees(joints[:, i]), label='joint {0}'.format(i+1), s=2)
-        # plt.scatter(phi_set, np.degrees(joints2[:, i]), label='joint2 {0}'.format(i+1), s=2)      
-        plt.plot(phi_set, np.degrees(joints[:, i]), label='joint {0}'.format(i+1))
-        # plt.plot(phi_set, np.degrees(joints2[:, i]), label='joint2 {0}'.format(i+1))
+        plt.scatter(phi_set, np.degrees(joints[:, i]), label='joint {0}'.format(i+1), s=2)     
+        # plt.plot(phi_set, np.degrees(joints[:, i]), label='joint {0}'.format(i+1))
     plt.legend()
     plt.show()
 
