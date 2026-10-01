@@ -30,6 +30,18 @@ something.
 | CasADi ≥ 3.6 | **only** to import `original/` and the tests that cross-check against it; tests skip cleanly without it |
 | Node.js | optional, for `scripts/check_demo.js` |
 
+The environment is managed with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv sync                    # .venv + uv.lock, dev group included (pytest, casadi, ruff)
+uv run pytest -q           # run anything inside it without activating
+uv sync --no-dev           # library only, no pytest/casadi/ruff
+uv sync --extra reference  # + CasADi, if you only want the cross-check tests
+```
+
+`uv.lock` is committed, so `uv sync` reproduces the exact versions the suite was
+last run against. `requirements.txt` is kept for callers who are not using uv:
+
 ```bash
 pip install -e .                    # numpy + matplotlib
 pip install -r requirements.txt     # adds casadi and pytest
@@ -41,20 +53,26 @@ pip install -r requirements.txt     # adds casadi and pytest
 
 ## Running things
 
+Prefix with `uv run` (or activate `.venv` first) if you are using the uv environment:
+
 ```bash
-pytest                                             # the whole suite (testpaths = tests)
-pytest tests/test_branches.py -q                   # the cross-check against original/
-pytest tests/test_geometry.py::test_q4_collapses_to_the_srs_elbow_law -q
+uv run pytest                                      # the whole suite (testpaths = tests)
+uv run pytest tests/test_branches.py -q            # the cross-check against original/
+uv run pytest tests/test_geometry.py::test_q4_collapses_to_the_srs_elbow_law -q
 
-MPLBACKEND=Agg python3 examples/01_forward_kinematics.py --save-dir /tmp/fk
-MPLBACKEND=Agg python3 examples/02_srs_reduction.py --save-dir /tmp/srs
-MPLBACKEND=Agg python3 examples/03_branches.py --save-dir /tmp/branches
+MPLBACKEND=Agg uv run python examples/01_forward_kinematics.py --save-dir /tmp/fk
+MPLBACKEND=Agg uv run python examples/02_srs_reduction.py --save-dir /tmp/srs
+MPLBACKEND=Agg uv run python examples/03_branches.py --save-dir /tmp/branches
 
-python3 -c "from franka_ik.report import build_demo_site; build_demo_site('demos')"
+uv run python -c "from franka_ik.report import build_demo_site; build_demo_site('demos')"
 for f in demos/*.html; do node scripts/check_demo.js "$f" || exit 1; done
 
-ruff check . && ruff format --check .              # line-length 100, target py39
+uv run ruff check .                                # line-length 100, target py39
 ```
+
+Without CasADi installed the suite reports 66 passed and 17 skipped rather than failing: the
+cross-check tests skip, and everything else runs. CasADi is only ever needed to import the
+published modules in `original/`.
 
 The root `conftest.py` puts the repository root and `original/` on `sys.path`, which is what
 lets the tests import the published modules by their bare names (`import ik_ca`). `tests/conftest.py`

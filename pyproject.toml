@@ -28,11 +28,19 @@ classifiers = [
 dependencies = ["numpy>=1.21", "matplotlib>=3.5"]
 
 [project.optional-dependencies]
-# CasADi is only needed to cross-check against the published implementation in
-# original/; the library itself is pure NumPy.
+# CasADi is not needed by the library -- the solver is pure NumPy -- but it is
+# what `original/` uses, so it is required to run the branch-by-branch
+# cross-check in `tests/test_branches.py` against the published implementation.
 reference = ["casadi>=3.6"]
-test = ["pytest>=7.0", "casadi>=3.6"]
-dev = ["pytest>=7.0", "casadi>=3.6", "ruff"]
+
+# PEP 735 dependency group: `uv sync` installs it by default, and it is the
+# environment the documented commands assume.
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "casadi>=3.6",
+    "ruff>=0.6",
+]
 
 [tool.setuptools.packages.find]
 include = ["franka_ik*"]

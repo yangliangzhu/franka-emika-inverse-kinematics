@@ -68,6 +68,7 @@ Keeping both roots is a **completion** of the original derivation, not a correct
 | pose residual of returned solutions | median 4.4 × 10⁻¹⁶, worst 2.0 × 10⁻¹⁴ |
 | shoulder-flip symmetry `(q₁,q₂,q₃) → (q₁+π, −q₂, q₃+π)` | 138/138 configurations |
 | wrist-flip symmetry `(q₅+π, −q₆, q₇+π)` | 0/138 — the Panda is not a true S-R-S arm |
+| independent optimiser (CasADi + IPOPT) finds only branches the solver returns | 56 solutions over 15 poses, **0 counter-examples**, worst distance 0.085° |
 
 Three defects of the published files are recorded rather than quietly fixed, because they are
 the kind that waste an afternoon: `limit_joints` never returns when it is handed a `nan`,
@@ -79,13 +80,35 @@ See `docs/limitations.md`.
 
 ## Install
 
+The environment is managed with [uv](https://docs.astral.sh/uv/). One command
+creates the virtual environment, installs the library in editable mode and
+brings in the development tools:
+
 ```bash
-pip install -e .                    # numpy + matplotlib, pure NumPy solver
-pip install -r requirements.txt     # adds CasADi, only needed to run original/
+git clone git@gitee.com:yangliangzhu_rob/franka-emika-inverse-kinematics.git
+cd franka-emika-inverse-kinematics
+uv sync                 # .venv + uv.lock, dev group included
+uv run pytest -q        # 83 tests
+uv run ruff check .
 ```
 
-Python ≥ 3.9. `franka_ik` itself imports nothing but NumPy; matplotlib is used by the figures,
-and CasADi only to cross-check the published implementation in `original/`.
+`uv sync` reads `uv.lock`, so a checkout reproduces the exact versions that were
+tested. `uv run <command>` executes inside that environment without activating
+it; `source .venv/bin/activate` works too if you prefer.
+
+The library itself needs only **numpy** and **matplotlib**. **CasADi** is an
+optional extra, pulled in by the `dev` group:
+
+```bash
+uv sync --no-dev                 # library only
+uv sync --extra reference        # + CasADi, for the cross-check against original/
+```
+
+CasADi is not used by `franka_ik` -- the solver is pure NumPy and runs all eight
+branches in about a millisecond -- but it is what `original/` uses, so
+`tests/test_branches.py` needs it to compare the library against the published
+implementation. Without it the suite skips those tests (66 passed, 17 skipped)
+rather than failing.
 
 ## Using it
 

@@ -207,7 +207,39 @@ Two caveats on the numbers:
   set; the maximum of eight distinct in-limit solutions per pose in §4 is consistent with that
   but does not establish it.
 
-## 7. The other defects found on the way
+## 7. A solver that shares nothing with it agrees
+
+The completeness claim would be weak if it rested only on a study that starts
+from configurations the analytical solver is asked to reproduce.  A solver that
+missed an entire branch would still return correct poses, and a coverage study
+would never notice.
+
+`franka_ik/numerical.py` therefore re-solves the same problem with machinery that
+shares no code and no assumption with the analytical one: the kinematics rebuilt
+symbolically in CasADi, "reach this pose with joint 7 at this value" stated as a
+constrained least-squares program, and IPOPT run from many random starting points
+inside the joint limits.  Anything it finds that the eight branches do not
+produce would be a counter-example.
+
+```python
+from franka_ik import model, completeness_check
+q = ...                                    # any in-limit configuration
+report = completeness_check(model.fk_flange(q), float(q[6]), starts=300)
+print(report.describe())                   # optimiser n, analytical m, matched n
+print(report.worst_distance_deg)           # how far apart they ever were
+```
+
+Measured over 15 random poses: the optimiser returned **56** configurations, the
+analytical solver **56**, and there were **0 counter-examples**.  The largest
+distance from a numerical solution to its nearest analytical branch was
+**0.0854°**, and it is worth being precise about what that residual is: IPOPT
+drives the *pose* error to zero, so near a kinematic singularity — where a joint
+can move a little without moving the tool — it stops a fraction of a degree away
+from the configuration it is standing on.  It is a property of the optimiser, not
+a missing branch, which is why the module reports the whole distance list instead
+of hiding the margin in one tolerance.
+
+## 8. The other defects found on the way
 
 The missing elbow root is the headline, but the same cross-check turned up three more defects in
 the published files. All are documented in `docs/limitations.md`, and the short version is:

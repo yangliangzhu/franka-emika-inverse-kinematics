@@ -10,6 +10,7 @@ Modules
 :mod:`franka_ik.geometry`   the SRS-equivalent geometry and the elbow quadratic
 :mod:`franka_ik.solver`     the eight-branch analytical inverse kinematics
 :mod:`franka_ik.analysis`   studies of the solution set (coverage, counts)
+:mod:`franka_ik.numerical`  an independent optimiser, used to test completeness
 """
 
 from __future__ import annotations
@@ -55,6 +56,12 @@ from .model import (
     lower_limits,
     manipulability,
     upper_limits,
+)
+from .numerical import (
+    CompletenessReport,
+    completeness_check,
+    numerical_ik,
+    symbolic_forward_kinematics,
 )
 from .solver import (
     NUM_BRANCHES,
@@ -113,4 +120,9 @@ __all__ = [
     "solution_count_study",
     "reachable_distance_range",
     "classify_failure",
+    # numerical cross-check (imports CasADi lazily, never at import time)
+    "CompletenessReport",
+    "completeness_check",
+    "numerical_ik",
+    "symbolic_forward_kinematics",
 ]

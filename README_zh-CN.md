@@ -70,13 +70,27 @@ tan_half_q4 = (a1 + ca.sqrt(a1**2 - 4*a0*a2)) / (2*a2)     # original/ik_ca.py
 
 ## 安装
 
+环境用 [uv](https://docs.astral.sh/uv/) 管理：
+
+```bash
+git clone git@gitee.com:yangliangzhu_rob/franka-emika-inverse-kinematics.git
+cd franka-emika-inverse-kinematics
+uv sync                 # 建 .venv 并装好 dev 组（pytest / casadi / ruff）
+uv run pytest -q        # 83 个测试
+uv run ruff check .
+```
+
+`uv.lock` 已提交，所以 `uv sync` 会复现测试时的确切版本；`uv run <命令>` 不必手动激活
+虚拟环境。不想用 uv 的话：
+
 ```bash
 pip install -e .                    # numpy + matplotlib，求解器是纯 NumPy
 pip install -r requirements.txt     # 额外装上 CasADi，只有跑 original/ 时才需要
 ```
 
-要求 Python ≥ 3.9。`franka_ik` 本身只依赖 NumPy；matplotlib 用于画图，CasADi 只用于对照
-`original/` 里的原实现。
+要求 Python ≥ 3.9。`franka_ik` 本身只依赖 NumPy；matplotlib 用于画图。**CasADi 是可选的** ——
+求解器不用它（纯 NumPy，8 个分支约 1 ms），但 `original/` 里的原实现用，所以逐支对照的测试需要
+它。没装 CasADi 时那部分测试会跳过（66 passed, 17 skipped）而不是失败。
 
 ## 使用
 
