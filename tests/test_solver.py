@@ -1,9 +1,9 @@
 """The eight-branch solver, joint-limit wrapping and branch continuity (facts 3, 5, 9).
 
 ``franka_ik/solver.py`` is the part of the repository that *does* something: it
-evaluates the eight candidate configurations of a pose, verifies each one against
-the forward kinematics, and reports what cannot be wrapped into the real joint
-ranges.  Three claims are tested here.
+evaluates the eight candidate configurations of a pose (``STEP3`` and ``STEP4`` of
+``docs/method.md``), verifies each one against the forward kinematics, and reports
+what cannot be wrapped into the real joint ranges.  Three claims are tested here.
 
 Round trip (fact 3)
     Solving the flange pose of a configuration with that configuration's own
