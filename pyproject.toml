@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "franka-ik"
+version = "0.2.0"
+description = "Analytical inverse kinematics for the Franka Emika Panda, by reduction to an equivalent S-R-S arm"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "yangliangzhu", email = "yangliangzhu@nervrobot.com" }]
+keywords = [
+    "robotics",
+    "inverse-kinematics",
+    "franka-emika",
+    "panda",
+    "redundant-manipulator",
+    "closed-form",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = ["numpy>=1.21", "matplotlib>=3.5"]
+
+[project.optional-dependencies]
+# CasADi is only needed to cross-check against the published implementation in
+# original/; the library itself is pure NumPy.
+reference = ["casadi>=3.6"]
+test = ["pytest>=7.0", "casadi>=3.6"]
+dev = ["pytest>=7.0", "casadi>=3.6", "ruff"]
+
+[tool.setuptools.packages.find]
+include = ["franka_ik*"]
+
+[tool.setuptools.package-data]
+franka_ik = ["web/*.css", "web/*.js"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+# original/ is kept verbatim as the published record; the notebook is a
+# historical artefact.  Rewriting either would destroy the provenance that
+# tests/test_branches.py depends on.
+extend-exclude = ["original", "notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "ARG", "PTH"]
+ignore = [
+    "E501",
+    "N802",
+    "N803",
+    "N806",
+    "ARG002",
+    # typing.Optional / typing.List are kept for Python 3.9 compatibility and to
+    # match the sibling repositories.
+    "UP006",
+    "UP007",
+    "UP035",
+    "UP045",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ARG001", "ARG002", "N806"]
+"examples/*" = ["T201", "INP001"]
+"scripts/*" = ["T201", "INP001"]

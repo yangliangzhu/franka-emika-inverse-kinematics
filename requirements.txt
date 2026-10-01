@@ -1,0 +1,11 @@
+# Runtime dependencies of franka_ik.
+numpy>=1.21
+matplotlib>=3.5
+
+# Needed only to cross-check against the published implementation in original/,
+# and by the symbolic parts of that implementation.  franka_ik itself is pure
+# NumPy plus matplotlib for the figures.
+casadi>=3.6
+
+# Optional: the study scripts and the test suite.
+pytest>=7.0
