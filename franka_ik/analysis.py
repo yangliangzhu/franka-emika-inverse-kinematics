@@ -394,6 +394,14 @@ def classify_failure(
         ``"outside_reachable_shell"``, ``"arm_angle_singular"`` and
         ``"no_valid_branch"``.  Every one of those corresponds to a ``return
         None`` in :func:`franka_ik.solver.solve_branch`, so a reader can trace it.
+
+    Raises:
+        ValueError: If ``pose`` or ``q7`` contains a non-finite value.  Every
+            *finite* input is classified, however absurd it is -- poses with
+            entries of 1e300 and non-orthonormal rotations included -- but a
+            ``nan`` cannot be classified, and propagating one silently is exactly
+            the failure mode that made the published ``limit_joints`` hang.  The
+            guard lives in :func:`franka_ik.solver.wrap_to_limits`.
     """
     from .geometry import shoulder_to_wrist, wrist_correction
 

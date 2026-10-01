@@ -17,8 +17,12 @@ equation by equation and this directory is the primary source it explains.
 **Cross-checking.** `franka_ik/` is a reimplementation, and a reimplementation is
 only trustworthy if it can be compared against something. `tests/test_branches.py`
 imports these modules and asserts, branch by branch, that the library reproduces
-them -- measured agreement is 1.6e-13 rad over 800 comparisons, so the two
-implementations are the same method in two notations.
+them -- measured agreement is **1200 of 1200** label-level comparisons over the
+whole joint-7 range, worst deviation **8.9e-14 rad**, so the two implementations
+are the same method in two notations.  (Label-level, not set-level: an earlier
+revision of the library swapped the two `phi_root` labels for `|q7| > 90 deg`
+while leaving the solution set unchanged, and a set-level comparison did not
+notice.)
 
 **The record of what was wrong.** The published solver takes one root of the
 elbow quadratic and therefore finds four of the eight branches; `limit_joints`

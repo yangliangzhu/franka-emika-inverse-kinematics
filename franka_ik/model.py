@@ -233,8 +233,11 @@ def jacobian(q: Sequence[float]) -> np.ndarray:
 
     Returns:
         The 6x7 Jacobian, the linear part first, obtained by the usual
-        axis-cross-product construction (the same one ``panda.py`` uses in its
-        ``jacobian_generator``).
+        axis-cross-product construction.  It is the Jacobian of the **flange**
+        frame, so it matches ``original/panda.py``'s ``jacobian_flange`` (to
+        5.6e-16), not its ``jacobian``: the latter differentiates the tool point,
+        which sits a further ``0.1034 m`` along the flange ``z``, and the two
+        differ by that lever arm.
     """
     frames = forward_kinematics(q)
     tip = frames[FLANGE_ROW][:3, 3]
