@@ -339,3 +339,52 @@ not at risk of rejecting good branches.
 * **Tool-frame IK.** See §3: convert first.
 * **Non-`PAPER_GEOMETRY` robots.** `EquivalentGeometry` is a parameter, so the reduction itself
   is not Panda-specific, but nothing else is tested with other values.
+
+## 12. `q₂ = 0` is a coordinate singularity of the reduction
+
+**Severity: real, but it needs an exactly-zero joint angle to trigger.**
+
+At `q₂ = 0` the shoulder loses a degree of freedom: joints 1 and 3 become coaxial, so
+their individual values stop being determined by the pose — only their combination is
+meaningful — and the closed form's reconstruction of the shoulder orientation collapses.
+The matrix element it reads joint 1 from is `r₀₃[1,1] = -sin θ₁ sin θ₂`, which is zero for
+*any* `θ₁` when `sin θ₂ = 0`, so `atan2(0, 0)` returns 0 and the branch comes back with
+`q₁ = 0` instead of the true value. Because every branch is verified against the forward
+kinematics before it is returned, that wrong branch is discarded — and if it was the only
+one inside the joint limits, the solver reports no solution at all.
+
+Reproducer (a configuration inside the limits, whose pose is exact):
+
+```python
+import numpy as np
+from franka_ik import model, solve, classify_failure
+
+q = np.radians([36.0, 0.0, -24.0, -100.0, 18.0, 126.0, 48.0])
+pose = model.fk_flange(q)
+
+solve(pose, float(q[6]), within_limits_only=True)   # -> []  (empty)
+classify_failure(pose, float(q[6]))                 # -> 'no_valid_branch'
+```
+
+The eight branches come back with `q₂ = 0` and a pose residual of `2.55e-2`, or with
+`q₂ = ±106.23°` / `±73.70°` and a residual of `1e-16` but **outside** the `[-100°, 100°]`
+range of joint 2. Perturbing the generating configuration by `±0.01°` in joint 2 restores
+two solutions, including the target itself.
+
+Two things are worth saying about this.
+
+* **The published implementation behaves the same way.** It uses the identical
+  reconstruction, so this is a property of the derivation, not of this reimplementation.
+  It is not one of the four defects listed in §4, §5 and §7 that `franka_ik` repairs — it
+  is a limitation that remains.
+* **The coverage study cannot see it.** The condition `q₂ = 0` has measure zero, so a
+  random sample never hits it (`coverage_study(300, seed=0)` still reports 300/300). It
+  shows up in practice when a *planned* path crosses the singular value, which is how it
+  was found: a joint-space interpolation in `examples/06_tracking.py` passed through
+  `q₂ = 0`. That example therefore keeps joint 2 away from zero and says so.
+
+A proper fix is a dedicated branch for `sin θ₂ ≈ 0`, in the spirit of the remedy Shimizu
+et al. give for the shoulder singularity in their Section II-E: fix one of the two
+indeterminate joints and recover the other from the shoulder position. That is a real piece
+of work and it is deliberately not attempted here; the honest statement is that the solver
+is complete for `q₂ ≠ 0` and singular at `q₂ = 0`.

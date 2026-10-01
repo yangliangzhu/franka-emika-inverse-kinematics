@@ -17,6 +17,8 @@ from __future__ import annotations
 __version__ = "0.2.0"
 
 from .analysis import (
+    PUBLISHED_Q4_ROOT,
+    BranchOutcome,
     CoverageReport,
     PoseStudy,
     SolutionCountReport,
@@ -31,6 +33,7 @@ from .geometry import (
     EquivalentGeometry,
     effective_wrist_length,
     equivalent_link_vectors,
+    link_offset,
     q4_coefficients,
     q4_discriminant,
     q4_roots,
@@ -42,11 +45,13 @@ from .model import (
     DH_PARAMETERS,
     LOWER_LIMITS_DEG,
     NUM_JOINTS,
+    TOOL_ROTATION,
     UPPER_LIMITS_DEG,
     fk_flange,
     fk_tool,
     forward_kinematics,
     jacobian,
+    joint_frames,
     lower_limits,
     manipulability,
     upper_limits,
@@ -75,6 +80,8 @@ __all__ = [
     "fk_tool",
     "jacobian",
     "manipulability",
+    "joint_frames",
+    "TOOL_ROTATION",
     # geometry
     "EquivalentGeometry",
     "PAPER_GEOMETRY",
@@ -86,6 +93,7 @@ __all__ = [
     "q4_discriminant",
     "q4_roots",
     "equivalent_link_vectors",
+    "link_offset",
     # solver
     "NUM_BRANCHES",
     "IkSolution",
@@ -95,6 +103,8 @@ __all__ = [
     "solve",
     "solve_closest",
     # analysis
+    "PUBLISHED_Q4_ROOT",
+    "BranchOutcome",
     "PoseStudy",
     "study_pose",
     "CoverageReport",
