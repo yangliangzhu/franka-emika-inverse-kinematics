@@ -1,0 +1,151 @@
+# franka-ik —— Franka Emika Panda 解析逆运动学
+
+[English](README.md) | **中文**
+
+这是 2020 年底为 Franka Emika Panda 推导的解析（闭式）逆运动学。Panda 本身不是 S-R-S 构型
+机械臂，所以先把手臂**等效**成一台 S-R-S 机械臂，再用
+[Shimizu 等 (2008)](https://doi.org/10.1109/TRO.2008.2003266) 的闭式解求解。冗余自由度用
+**关节 7** 参数化：给定目标位姿和想要的 q₇，返回所有满足条件的构型。
+
+Panda 的肩部偏置 0.0825 m、腕部偏置 0.088 m，因此这个化归并非平凡。`docs/method.md`
+逐式对照手写推导（仓库根目录的 `franka解析反解方法.pdf`，`STEP1`–`STEP4`）。
+
+```python
+import numpy as np
+import franka_ik as fk
+
+q = np.array([0.3, -0.4, 0.2, -1.2, 0.1, 1.0, 0.5])   # 任意一个合法构型
+pose = fk.fk_flange(q)
+
+solutions = fk.solve(pose, q7=q[6], within_limits_only=True)
+print(solutions[0].describe())
+# q4+ phi+ flip    q = [ 17.189, -22.918,  11.459, -68.755,   5.730,  57.296,  28.648] deg   pose error 3.75e-16   in limits
+```
+
+## 主要结论
+
+当年发布的实现认为有**四个**分支（其 readme 是这么写的，也确实提供了两个文件、各两个入口）。
+实际上有**八个**。`STEP2` 的肘部方程是关于 `tan(θ₄/2)` 的一元二次方程，而原代码只取了 `+` 根：
+
+```python
+tan_half_q4 = (a1 + ca.sqrt(a1**2 - 4*a0*a2)) / (2*a2)     # original/ik_ca.py
+```
+
+两个根都保留后分支数翻倍，效果是可测量的：
+
+| 指标（300 个关节限位内随机构型，`seed 0`） | 原四分支 | 本库八分支 |
+|---|---|---|
+| 能反解回原构型 | 265/300 = **88.3 %** | 300/300 = **100 %** |
+| 返回解的位姿残差 | ≤ 2.0 × 10⁻¹⁴ | ≤ 2.0 × 10⁻¹⁴ |
+| 单个位姿在限位内的不同解个数 | — | 平均 **3.15**，范围 1–8 |
+| 全部候选分支耗时（纯 NumPy） | — | 约 1.3 ms/位姿 |
+
+关键区别在于：原有的四个分支**都是对的**，只是不全。漏掉分支的解算器依然会返回四个精确的
+位姿，唯一能发现问题的检验是"能不能把出发点原样还给我"——这正是 `analysis.coverage_study`
+所做的测量，细节见 `docs/branch_analysis.md`。300 个目标中丢失的那 35 个，恰好就是肘部落在
+二次方程第二个根上的构型。
+
+这也不只是"冗余自由度选得不够好"的问题：在 150 个随机构型上，原四分支给出的限位内解比八分支
+少 18.6%；其中甚至有一个位姿，原四分支一个解都给不出来（把可达位姿判成了不可达），而八分支
+能找到四个解。
+
+因此，保留两个根是对原推导的**补充**，而不是对它的推翻。
+
+## 与原实现的交叉验证
+
+`original/` 里是 2020 年发布时的文件，一字未改。本库与之逐项对照：
+
+| 检验项 | 结果 |
+|---|---|
+| NumPy 模型与 CasADi 模型（`fk_flange`、`fk_tool`），300 个随机构型 | 3.3 × 10⁻¹⁶ |
+| 本库与原解算器逐分支对照（覆盖整个关节 7 区间） | 1200/1200 一致，最大偏差 **1.30 × 10⁻¹³ rad** |
+| 返回解的位姿残差 | 中位数 4.4 × 10⁻¹⁶，最大 2.0 × 10⁻¹⁴ |
+| 肩部翻转对称 `(q₁,q₂,q₃) → (q₁+π, −q₂, q₃+π)` | 138/138 构型成立 |
+| 腕部翻转对称 `(q₅+π, −q₆, q₇+π)` | 0/138 —— Panda 不是真正的 S-R-S 构型 |
+
+原代码中还有三处缺陷被记录下来而不是悄悄改掉，因为它们都特别费时间：`limit_joints` 遇到
+`nan` 会死循环、`Panda.fk` 返回符号对象无法转成数值、关节 4 和关节 6 的限位窗口比一整圈还宽。
+第四处出在腕部符号判据上，这一处是直接**修好**的：该判据在 `q₇ = ±90°` 处退化并给出错误位姿，
+而本库改为在腕部两个候选构型中挑选真正能到达目标位姿的那个。详见 `docs/limitations.md`。
+
+## 安装
+
+```bash
+pip install -e .                    # numpy + matplotlib，求解器是纯 NumPy
+pip install -r requirements.txt     # 额外装上 CasADi，只有跑 original/ 时才需要
+```
+
+要求 Python ≥ 3.9。`franka_ik` 本身只依赖 NumPy；matplotlib 用于画图，CasADi 只用于对照
+`original/` 里的原实现。
+
+## 使用
+
+```python
+import numpy as np
+import franka_ik as fk
+
+pose = fk.fk_flange(np.array([0.3, -0.4, 0.2, -1.2, 0.1, 1.0, 0.5]))   # 4x4 位姿由你提供
+q7   = 0.5                                # 冗余参数，单位弧度
+
+fk.solve(pose, q7, within_limits_only=True)      # 已校验、在限位内、已去重
+fk.branch_solutions(pose, q7)                    # 全部分支，不做筛选
+fk.solve_closest(pose, q7, reference=previous)   # 离参考构型最近的一支，用于跟踪
+```
+
+`solve` 会用正运动学校验每个候选解，残差超过 `tolerance`（默认 `1e-9`）的直接丢弃，所以返回
+的一定是对的；但它不保证一定有解，而且有没有解取决于你给的 `q₇`。接进控制器之前，有三点需要
+知道：
+
+* **`q₇` 要跟踪，不能固定。** 固定一个 `q₇` 时，可达位姿里只有大约三分之一能解出来；而沿用上
+  一条指令的 `q₇`，同一批样本是 200/200。
+* **求解器针对的是法兰（flange）坐标系**，不是工具坐标系。换算关系是
+  `T_flange = T_tool @ rot_z(+π/4) @ trans_z(-0.1034)`；漏掉 0.1034 m 这一项会得到"看起来正常、
+  其实是错的"结果。
+* **`q₇ = ±90°` 曾经是最脆弱的地方。** 原实现的腕部符号判据正比于 `cos²(q₇)`，在那里退化为零，
+  会返回错误位姿（在整个关节 7 区间上扫过 7896 次调用，16 次落在错误位姿上，全部出现在 `±90°`）。
+  本库没有这个问题：它会分别算出腕部的两个候选构型，保留真正能到达目标位姿的那个；在 `±90°`
+  处 100/100 都能反解回原构型。
+
+这三点背后的测量都在 `docs/limitations.md`。
+
+## 目录结构
+
+| 路径 | 说明 |
+|---|---|
+| `franka_ik/` | 库本体：`model`（改进 DH 正解、雅可比）、`geometry`（S-R-S 化归）、`solver`（八分支解析反解）、`analysis`（解集研究），以及负责画图与演示页面的 `viz`、`report` |
+| `original/` | 2020 年的实现，原样保留：`panda.py`、`ik_ca.py`、`ik_ca2.py`、`test.ipynb` |
+| `docs/` | `method.md`、`branch_analysis.md`、`limitations.md`、`api.md`，以及作者当年的 `original_notes_zh.md` |
+| `franka解析反解方法.pdf` | 手写推导，`STEP1`–`STEP4` |
+| `tests/` | 测试套件，包含与 `original/` 的逐分支对照 |
+| `examples/` | 三个可直接运行的示例：模型、化归、八个分支 |
+| `demos/` | 自带样式的交互式 HTML 页面，浏览器直接打开 `demos/index.html` 即可，不需要服务器或构建 |
+| `scripts/` | 研究脚本与演示页面自检脚本 |
+
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [docs/method.md](docs/method.md) | 推导全过程，按 `STEP1`–`STEP4` 逐式展开，并标注 S-R-S 论文的公式号 |
+| [docs/branch_analysis.md](docs/branch_analysis.md) | 四个分支还是八个：测量方法，以及为什么最直观的检验看不出问题 |
+| [docs/limitations.md](docs/limitations.md) | 关节限位、`q₇ = ±90°`、并不存在的对称性、原代码的缺陷 |
+| [docs/api.md](docs/api.md) | 全部导出符号，含签名与示例 |
+| [docs/original_notes_zh.md](docs/original_notes_zh.md) | 作者 2020 年写下的原始说明 |
+| [AGENTS.md](AGENTS.md) | 参与开发指南：环境、测试、代码风格 |
+
+## 来龙去脉
+
+这是一套自行推导的方法，写于 2020 年底作者刚接触 Franka 机械臂的时候，当时并没有在网上找到
+Panda 的解析反解。它的思路是在一篇 KUKA（S-R-S 构型）反解论文的基础上做化归，并不是最优方法；
+这几年也出现了很多更好的方法，本仓库仅供参考。2020 年的代码原封不动地保存在 `original/` 里，
+`docs/original_notes_zh.md` 是作者当年的说明，推导本身则是仓库根目录那份手写 PDF。
+
+使用的话，请引用闭式解的出处：
+
+> M. Shimizu, H. Kakuya, W.-K. Yoon, K. Kitagaki, K. Kosuge, "Analytical Inverse Kinematic
+> Computation for 7-DOF Redundant Manipulators With Joint Limits and Its Application to
+> Redundancy Resolution", *IEEE Transactions on Robotics*, 24(5):1131–1142, 2008.
+> [doi:10.1109/TRO.2008.2003266](https://doi.org/10.1109/TRO.2008.2003266)
+
+## 许可证
+
+MIT，见 [LICENSE](LICENSE)。
