@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Every configuration that reaches one pose</title>
+<style>
+/* Interactive report styling for the franka_ik demos.
+ *
+ * Deliberately dependency-free and offline-safe: no web fonts, no CDN, no
+ * framework.  The pages must open correctly straight from the file system.
+ */
+
+:root {
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --ink: #1c1c1c;
+  --muted: #6b6b6b;
+  --line: #d8d8d4;
+  --accent: #08519c;
+  --limit: #cb181d;
+  --feasible: #c7e9c0;
+  --infeasible: #e4e4e0;
+  --warn-bg: #fff4e5;
+  --warn-border: #f0a13a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 0 3rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC",
+    "PingFang SC", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  padding: 1.1rem 1.5rem 0.9rem;
+}
+
+header h1 { margin: 0 0 0.25rem; font-size: 1.35rem; }
+header p { margin: 0; color: var(--muted); font-size: 0.9rem; max-width: 70rem; }
+
+nav.pages {
+  margin-top: 0.7rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+nav.pages a {
+  text-decoration: none;
+  color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.15rem 0.75rem;
+  font-size: 0.85rem;
+  background: var(--panel);
+}
+
+nav.pages a.current { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+main { padding: 1.2rem 1.5rem 0; max-width: 1500px; margin: 0 auto; }
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(420px, 1.35fr);
+  gap: 1.1rem;
+  align-items: start;
+}
+
+@media (max-width: 1050px) { .grid { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.85rem 1rem 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.card h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+.card h3 { margin: 0.9rem 0 0.35rem; font-size: 0.92rem; color: var(--muted); font-weight: 600; }
+
+canvas { display: block; width: 100%; border-radius: 6px; }
+
+canvas.scene { height: 430px; background: #fbfbfa; border: 1px solid var(--line); cursor: grab; }
+canvas.scene:active { cursor: grabbing; }
+canvas.chart { height: 260px; }
+canvas.chart.tall { height: 420px; }
+canvas.chart.xtall { height: 620px; }
+
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.7rem; }
+
+.controls label { font-size: 0.85rem; color: var(--muted); }
+
+input[type="range"] { flex: 1 1 220px; min-width: 160px; accent-color: var(--accent); }
+
+button, select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:hover { border-color: var(--accent); }
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
+.readout div { background: #f2f4f7; border-radius: 6px; padding: 0.25rem 0.6rem; }
+.readout b { color: var(--accent); font-weight: 600; }
+
+table { border-collapse: collapse; width: 100%; font-size: 0.84rem; }
+th, td { border-bottom: 1px solid var(--line); padding: 0.28rem 0.45rem; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+td.bad { color: var(--limit); font-weight: 600; }
+td.psi { font-variant-numeric: tabular-nums; }
+
+.note {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.86rem;
+  margin: 0.8rem 0 0;
+}
+
+.note.ok { background: #eef7ee; border-color: #7cb87c; }
+.note h3 { margin: 0 0 0.3rem; color: inherit; }
+.note ul { margin: 0.3rem 0 0; padding-left: 1.1rem; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 0.75rem; font-size: 0.8rem; margin-top: 0.4rem; }
+.legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend i.band { height: 12px; opacity: 0.8; }
+
+/* branch toggles: one checkbox per arm drawn in the 3D scene */
+.branches { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; margin-top: 0.6rem; font-size: 0.82rem; }
+.branches label { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+.branches i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.branches input { margin: 0; accent-color: var(--accent); }
+.branches .dim { opacity: 0.45; }
+
+footer { max-width: 1500px; margin: 2rem auto 0; padding: 0 1.5rem; color: var(--muted); font-size: 0.82rem; }
+footer code { background: #efefec; padding: 0.05rem 0.3rem; border-radius: 4px; }
+
+</style>
+</head>
+<body>
+<header>
+  <h1>Every configuration that reaches one pose</h1>
+  <p>The Panda is not an S-R-S arm, so the reduction to an equivalent S-R-S arm is a one-parameter family. Each member contributes its own branch, and the published solver kept only half of them.</p>
+  <nav class="pages"><a href="index.html">overview</a><a href="branches.html" class="current">solution branches</a><a href="coverage.html">coverage study</a></nav>
+</header>
+<main>
+  <div class="grid">
+    <section class="card">
+      <h2>arm configurations</h2>
+      <canvas id="scene" class="scene"></canvas>
+      <div id="branches" class="branches"></div>
+    </section>
+    <section class="card">
+      <h2>analysis</h2>
+      <canvas id="chart" class="chart tall"></canvas>
+      <div id="legend" class="legend"></div>
+    </section>
+  </div>
+  <section class="card" id="table-card" style="margin-top:1.1rem">
+    <h2>numbers</h2>
+    <div id="table"></div>
+  </section>
+  <section class="card" style="margin-top:1.1rem">
+    <h2>notes</h2>
+    <div id="notes"></div>
+  </section>
+</main>
+<footer>
+  Generated by <code>franka_ik.report</code>.  The method is the one derived in
+  <code>franka&#35299;&#26512;&#21453;&#35299;&#26041;&#27861;.pdf</code>: reduce the Panda to an equivalent S-R-S arm and solve
+  that arm in closed form.  Every value on this page is computed in Python; the
+  page only draws it.
+</footer>
+<script>
+window.FRANKA_IK_DATA = {"kind":"branches","arms":[{"label":"q4+ phi+ flip","color":"#08519c","points":[[0.0,0.0,0.0],[0.0,0.0,0.333],[0.0,0.0,0.333],[-0.075594,-0.010275,0.639653],[-0.012897,0.040527,0.656811],[0.029051,0.131859,1.036497],[0.029051,0.131859,1.036497],[-0.008242,0.140189,1.115767],[0.081931,0.183599,1.153627]],"qDeg":[7.7408,-13.9704,30.5187,-37.3019,-18.7111,133.3453,-58.7831],"poseError":2.3869795029440866e-15,"withinLimits":true,"recoversTarget":false},{"label":"q4+ phi- plain","color":"#6baed6","points":[[0.0,0.0,0.0],[0.0,0.0,0.333],[0.0,0.0,0.333],[0.121993,0.056169,0.61904],[0.045912,0.060304,0.650676],[0.029051,0.131859,1.036497],[0.029051,0.131859,1.036497],[-0.008242,0.140189,1.115767],[0.081931,0.183599,1.153627]],"qDeg":[24.7226,25.1513,154.4557,-37.3019,-161.2889,101.2157,-58.7831],"poseError":6.661338147750939e-16,"withinLimits":true,"recoversTarget":false},{"label":"q4+ phi- flip","color":"#238b45","points":[[0.0,0.0,0.0],[0.0,0.0,0.333],[0.0,0.0,0.333],[0.121993,0.056169,0.61904],[0.045912,0.060304,0.650676],[0.029051,0.131859,1.036497],[0.029051,0.131859,1.036497],[-0.008242,0.140189,1.115767],[0.081931,0.183599,1.153627]],"qDeg":[-155.2774,-25.1513,-25.5443,-37.3019,-161.2889,101.2157,-58.7831],"poseError":6.661338147750939e-16,"withinLimits":true,"recoversTarget":false},{"label":"q4- phi+ plain","color":"#74c476","points":[[0.0,0.0,0.0],[0.0,0.0,0.333],[0.0,0.0,0.333],[-0.007182,0.013868,0.648614],[0.026519,0.089128,0.646074],[0.029051,0.131859,1.036497],[0.029051,0.131859,1.036497],[-0.008242,0.140189,1.115767],[0.081931,0.183599,1.153627]],"qDeg":[117.3798,2.8329,-51.469,-16.2126,-46.9276,122.3074,-58.7831],"poseError":1.3877787807814457e-15,"withinLimits":true,"recoversTarget":false},{"label":"q4- phi+ flip","color":"#cb181d","points":[[0.0,0.0,0.0],[0.0,0.0,0.333],[0.0,0.0,0.333],[-0.007182,0.013868,0.648614],[0.026519,0.089128,0.646074],[0.029051,0.131859,1.036497],[0.029051,0.131859,1.036497],[-0.008242,0.140189,1.115767],[0.081931,0.183599,1.153627]],"qDeg":[-62.6202,-2.8329,128.531,-16.2126,-46.9276,122.3074,-58.7831],"poseError":1.3877787807814457e-15,"withinLimits":true,"recoversTarget":true},{"label":"q4- phi- plain","color":"#fb6a4a","points":[[0.0,0.0,0.0],[0.0,0.0,0.333],[0.0,0.0,0.333],[0.055889,0.035078,0.642034],[-0.015884,0.074868,0.650498],[0.029051,0.131859,1.036497],[0.029051,0.131859,1.036497],[-0.008242,0.140189,1.115767],[0.081931,0.183599,1.153627]],"qDeg":[32.1138,12.0529,119.4258,-16.2126,-133.0724,112.2537,-58.7831],"poseError":1.2490009027033011e-15,"withinLimits":true,"recoversTarget":false},{"label":"q4- phi- flip","color":"#6a51a3","points":[[0.0,0.0,0.0],[0.0,0.0,0.333],[0.0,0.0,0.333],[0.055889,0.035078,0.642034],[-0.015884,0.074868,0.650498],[0.029051,0.131859,1.036497],[0.029051,0.131859,1.036497],[-0.008242,0.140189,1.115767],[0.081931,0.183599,1.153627]],"qDeg":[-147.8862,-12.0529,-60.5742,-16.2126,-133.0724,112.2537,-58.7831],"poseError":1.304512053934559e-15,"withinLimits":true,"recoversTarget":false}],"target":{"points":[[0.0,0.0,0.0],[0.0,0.0,0.333],[0.0,0.0,0.333],[-0.007182,0.013868,0.648614],[0.026519,0.089128,0.646074],[0.029051,0.131859,1.036497],[0.029051,0.131859,1.036497],[-0.008242,0.140189,1.115767],[0.081931,0.183599,1.153627]],"qDeg":[-62.6202,-2.8329,128.531,-16.2126,-46.9276,122.3074,-58.7831]},"tool":[0.081931,0.183599,1.153627],"toggleArms":true,"panels":[{"title":"elbow quadratic at |x_sw| = 0.7163 m   (discriminant +8.8166e-03)","yLabel":"normalised","xLabel":"x = tan(theta4 / 2)","xValues":[-6.0,-5.97,-5.94,-5.91,-5.88,-5.85,-5.82,-5.79,-5.76,-5.73,-5.7,-5.67,-5.64,-5.61,-5.58,-5.55,-5.52,-5.49,-5.46,-5.43,-5.4,-5.37,-5.34,-5.31,-5.28,-5.25,-5.22,-5.19,-5.16,-5.13,-5.1,-5.07,-5.04,-5.01,-4.98,-4.95,-4.92,-4.89,-4.86,-4.83,-4.8,-4.77,-4.74,-4.71,-4.68,-4.65,-4.62,-4.59,-4.56,-4.53,-4.5,-4.47,-4.44,-4.41,-4.38,-4.35,-4.32,-4.29,-4.26,-4.23,-4.2,-4.17,-4.14,-4.11,-4.08,-4.05,-4.02,-3.99,-3.96,-3.93,-3.9,-3.87,-3.84,-3.81,-3.78,-3.75,-3.72,-3.69,-3.66,-3.63,-3.6,-3.57,-3.54,-3.51,-3.48,-3.45,-3.42,-3.39,-3.36,-3.33,-3.3,-3.27,-3.24,-3.21,-3.18,-3.15,-3.12,-3.09,-3.06,-3.03,-3.0,-2.97,-2.94,-2.91,-2.88,-2.85,-2.82,-2.79,-2.76,-2.73,-2.7,-2.67,-2.64,-2.61,-2.58,-2.55,-2.52,-2.49,-2.46,-2.43,-2.4,-2.37,-2.34,-2.31,-2.28,-2.25,-2.22,-2.19,-2.16,-2.13,-2.1,-2.07,-2.04,-2.01,-1.98,-1.95,-1.92,-1.89,-1.86,-1.83,-1.8,-1.77,-1.74,-1.71,-1.68,-1.65,-1.62,-1.59,-1.56,-1.53,-1.5,-1.47,-1.44,-1.41,-1.38,-1.35,-1.32,-1.29,-1.26,-1.23,-1.2,-1.17,-1.14,-1.11,-1.08,-1.05,-1.02,-0.99,-0.96,-0.93,-0.9,-0.87,-0.84,-0.81,-0.78,-0.75,-0.72,-0.69,-0.66,-0.63,-0.6,-0.57,-0.54,-0.51,-0.48,-0.45,-0.42,-0.39,-0.36,-0.33,-0.3,-0.27,-0.24,-0.21,-0.18,-0.15,-0.12,-0.09,-0.06,-0.03,0.0,0.03,0.06,0.09,0.12,0.15,0.18,0.21,0.24,0.27,0.3,0.33,0.36,0.39,0.42,0.45,0.48,0.51,0.54,0.57,0.6,0.63,0.66,0.69,0.72,0.75,0.78,0.81,0.84,0.87,0.9,0.93,0.96,0.99,1.02,1.05,1.08,1.11,1.14,1.17,1.2,1.23,1.26,1.29,1.32,1.35,1.38,1.41,1.44,1.47,1.5,1.53,1.56,1.59,1.62,1.65,1.68,1.71,1.74,1.77,1.8,1.83,1.86,1.89,1.92,1.95,1.98,2.01,2.04,2.07,2.1,2.13,2.16,2.19,2.22,2.25,2.28,2.31,2.34,2.37,2.4,2.43,2.46,2.49,2.52,2.55,2.58,2.61,2.64,2.67,2.7,2.73,2.76,2.79,2.82,2.85,2.88,2.91,2.94,2.97,3.0,3.03,3.06,3.09,3.12,3.15,3.18,3.21,3.24,3.27,3.3,3.33,3.36,3.39,3.42,3.45,3.48,3.51,3.54,3.57,3.6,3.63,3.66,3.69,3.72,3.75,3.78,3.81,3.84,3.87,3.9,3.93,3.96,3.99,4.02,4.05,4.08,4.11,4.14,4.17,4.2,4.23,4.26,4.29,4.32,4.35,4.38,4.41,4.44,4.47,4.5,4.53,4.56,4.59,4.62,4.65,4.68,4.71,4.74,4.77,4.8,4.83,4.86,4.89,4.92,4.95,4.98,5.01,5.04,5.07,5.1,5.13,5.16,5.19,5.22,5.25,5.28,5.31,5.34,5.37,5.4,5.43,5.46,5.49,5.52,5.55,5.58,5.61,5.64,5.67,5.7,5.73,5.76,5.79,5.82,5.85,5.88,5.91,5.94,5.97,6.0],"series":[{"label":"a2 x^2 - a1 x + a0","values":[-33.16830893,-32.82360776,-32.48070659,-32.13960542,-31.80030425,-31.46280308,-31.12710192,-30.79320075,-30.46109958,-30.13079841,-29.80229724,-29.47559607,-29.1506949,-28.82759373,-28.50629257,-28.1867914,-27.86909023,-27.55318906,-27.23908789,-26.92678672,-26.61628555,-26.30758438,-26.00068322,-25.69558205,-25.39228088,-25.09077971,-24.79107854,-24.49317737,-24.1970762,-23.90277503,-23.61027387,-23.3195727,-23.03067153,-22.74357036,-22.45826919,-22.17476802,-21.89306685,-21.61316569,-21.33506452,-21.05876335,-20.78426218,-20.51156101,-20.24065984,-19.97155867,-19.7042575,-19.43875634,-19.17505517,-18.913154,-18.65305283,-18.39475166,-18.13825049,-17.88354932,-17.63064815,-17.37954699,-17.13024582,-16.88274465,-16.63704348,-16.39314231,-16.15104114,-15.91073997,-15.67223881,-15.43553764,-15.20063647,-14.9675353,-14.73623413,-14.50673296,-14.27903179,-14.05313062,-13.82902946,-13.60672829,-13.38622712,-13.16752595,-12.95062478,-12.73552361,-12.52222244,-12.31072127,-12.10102011,-11.89311894,-11.68701777,-11.4827166,-11.28021543,-11.07951426,-10.88061309,-10.68351192,-10.48821076,-10.29470959,-10.10300842,-9.91310725,-9.72500608,-9.53870491,-9.35420374,-9.17150258,-8.99060141,-8.81150024,-8.63419907,-8.4586979,-8.28499673,-8.11309556,-7.94299439,-7.77469323,-7.60819206,-7.44349089,-7.28058972,-7.11948855,-6.96018738,-6.80268621,-6.64698504,-6.49308388,-6.34098271,-6.19068154,-6.04218037,-5.8954792,-5.75057803,-5.60747686,-5.4661757,-5.32667453,-5.18897336,-5.05307219,-4.91897102,-4.78666985,-4.65616868,-4.52746751,-4.40056635,-4.27546518,-4.15216401,-4.03066284,-3.91096167,-3.7930605,-3.67695933,-3.56265816,-3.450157,-3.33945583,-3.23055466,-3.12345349,-3.01815232,-2.91465115,-2.81294998,-2.71304881,-2.61494765,-2.51864648,-2.42414531,-2.33144414,-2.24054297,-2.1514418,-2.06414063,-1.97863947,-1.8949383,-1.81303713,-1.73293596,-1.65463479,-1.57813362,-1.50343245,-1.43053128,-1.35943012,-1.29012895,-1.22262778,-1.15692661,-1.09302544,-1.03092427,-0.9706231,-0.91212193,-0.85542077,-0.8005196,-0.74741843,-0.69611726,-0.64661609,-0.59891492,-0.55301375,-0.50891259,-0.46661142,-0.42611025,-0.38740908,-0.35050791,-0.31540674,-0.28210557,-0.2506044,-0.22090324,-0.19300207,-0.1669009,-0.14259973,-0.12009856,-0.09939739,-0.08049622,-0.06339505,-0.04809389,-0.03459272,-0.02289155,-0.01299038,-0.00488921,0.00141196,0.00591313,0.0086143,0.00951546,0.00861663,0.0059178,0.00141897,-0.00487986,-0.01297869,-0.02287752,-0.03457636,-0.04807519,-0.06337402,-0.08047285,-0.09937168,-0.12007051,-0.14256934,-0.16686817,-0.19296701,-0.22086584,-0.25056467,-0.2820635,-0.31536233,-0.35046116,-0.38735999,-0.42605882,-0.46655766,-0.50885649,-0.55295532,-0.59885415,-0.64655298,-0.69605181,-0.74735064,-0.80044948,-0.85534831,-0.91204714,-0.97054597,-1.0308448,-1.09294363,-1.15684246,-1.22254129,-1.29004013,-1.35933896,-1.43043779,-1.50333662,-1.57803545,-1.65453428,-1.73283311,-1.81293194,-1.89483078,-1.97852961,-2.06402844,-2.15132727,-2.2404261,-2.33132493,-2.42402376,-2.51852259,-2.61482143,-2.71292026,-2.81281909,-2.91451792,-3.01801675,-3.12331558,-3.23041441,-3.33931325,-3.45001208,-3.56251091,-3.67680974,-3.79290857,-3.9108074,-4.03050623,-4.15200506,-4.2753039,-4.40040273,-4.52730156,-4.65600039,-4.78649922,-4.91879805,-5.05289688,-5.18879571,-5.32649455,-5.46599338,-5.60729221,-5.75039104,-5.89528987,-6.0419887,-6.19048753,-6.34078637,-6.4928852,-6.64678403,-6.80248286,-6.95998169,-7.11928052,-7.28037935,-7.44327818,-7.60797702,-7.77447585,-7.94277468,-8.11287351,-8.28477234,-8.45847117,-8.63397,-8.81126883,-8.99036767,-9.1712665,-9.35396533,-9.53846416,-9.72476299,-9.91286182,-10.10276065,-10.29445948,-10.48795832,-10.68325715,-10.88035598,-11.07925481,-11.27995364,-11.48245247,-11.6867513,-11.89285014,-12.10074897,-12.3104478,-12.52194663,-12.73524546,-12.95034429,-13.16724312,-13.38594195,-13.60644079,-13.82873962,-14.05283845,-14.27873728,-14.50643611,-14.73593494,-14.96723377,-15.2003326,-15.43523144,-15.67193027,-15.9104291,-16.15072793,-16.39282676,-16.63672559,-16.88242442,-17.12992326,-17.37922209,-17.63032092,-17.88321975,-18.13791858,-18.39441741,-18.65271624,-18.91281507,-19.17471391,-19.43841274,-19.70391157,-19.9712104,-20.24030923,-20.51120806,-20.78390689,-21.05840572,-21.33470456,-21.61280339,-21.89270222,-22.17440105,-22.45789988,-22.74319871,-23.03029754,-23.31919637,-23.60989521,-23.90239404,-24.19669287,-24.4927917,-24.79069053,-25.09038936,-25.39188819,-25.69518703,-26.00028586,-26.30718469,-26.61588352,-26.92638235,-27.23868118,-27.55278001,-27.86867884,-28.18637768,-28.50587651,-28.82717534,-29.15027417,-29.475173,-29.80187183,-30.13037066,-30.46066949,-30.79276833,-31.12666716,-31.46236599,-31.79986482,-32.13916365,-32.48026248,-32.82316131,-33.16786015,-33.51435898,-33.86265781,-34.21275664,-34.56465547,-34.9183543,-35.27385313,-35.63115196,-35.9902508,-36.35114963,-36.71384846,-37.07834729,-37.44464612,-37.81274495,-38.18264378,-38.55434261,-38.92784145],"color":"#08519c","width":2.0}],"markers":[{"x":-0.337527762453683,"label":"theta4 = -37.30 deg","color":"#cb181d"},{"x":-0.14243328075378175,"label":"theta4 = -16.21 deg","color":"#238b45"}]}],"table":{"headers":["branch","joint angles (deg)","pose error (m)","flags"],"rows":[["q4+ phi+ flip","7.74, -13.97, 30.52, -37.30, -18.71, 133.35, -58.78","2.39e-15","-"],["q4+ phi- plain","24.72, 25.15, 154.46, -37.30, -161.29, 101.22, -58.78","6.66e-16","-"],["q4+ phi- flip","-155.28, -25.15, -25.54, -37.30, -161.29, 101.22, -58.78","6.66e-16","-"],["q4- phi+ plain","117.38, 2.83, -51.47, -16.21, -46.93, 122.31, -58.78","1.39e-15","-"],["q4- phi+ flip","-62.62, -2.83, 128.53, -16.21, -46.93, 122.31, -58.78","1.39e-15","TARGET"],["q4- phi- plain","32.11, 12.05, 119.43, -16.21, -133.07, 112.25, -58.78","1.25e-15","-"],["q4- phi- flip","-147.89, -12.05, -60.57, -16.21, -133.07, 112.25, -58.78","1.30e-15","-"]]},"notes":["<b>7 distinct configurations</b> reach this flange pose with joint 7 at -58.783 deg, and every one of them is exact: the pose residual at the bottom of the table is the largest entry of <code>fk_flange(q) - target</code>, and it is at machine precision.","The dashed black arm is the configuration the pose was generated from. Only a solver that enumerates <i>all</i> branches finds it; a solver with four branches returns four perfectly valid poses and misses it silently in roughly one case out of eight.","The curve is the elbow quadratic of STEP2 of the derivation, drawn against <code>x = tan(theta4/2)</code>. Its <b>two</b> roots are marked. The published implementation kept only the positive one, which is exactly why it saw four branches instead of eight. Toggle the arms below the 3D view to see which root each one came from: the branch labels read <code>q4+</code> / <code>q4-</code> for the root, <code>phi+</code> / <code>phi-</code> for the equivalent arm angle, and <code>plain</code> / <code>flip</code> for the shoulder symmetry."]};
+</script>
+<script>
+/* Interactive renderer for the franka_ik HTML reports.
+ *
+ * The Python side computes everything and embeds it as `window.FRANKA_IK_DATA`.
+ * This file only draws it: a 3D wireframe scene that can show several arm
+ * configurations at once (one per solution branch, which is the whole point of
+ * this repository), a general multi-panel 2D chart, and a table.
+ *
+ * No external dependency, no CDN, no network: the pages must open from disk.
+ *
+ * Data schema (angles in degrees, positions in metres):
+ *
+ *   title        string
+ *   kind         "index" | "branches" | "coverage" | "tracking"
+ *   arms         [{label, color, points: [[x,y,z] x 8], qDeg[7],
+ *                  poseError, withinLimits, recoversTarget, dim?}]
+ *   target       {points, qDeg} | null       the configuration the pose came from
+ *   tool         [x, y, z] | null            the target pose position
+ *   panels       see below
+ *   table        {headers, rows}
+ *   notes        string[]
+ *   toggleArms   boolean                     offer per-arm visibility checkboxes
+ *
+ * Panel schema:
+ *   {title, series: [{label, values, color?, dashed?}], xValues?, xLabel?,
+ *    markers: [{x, label, color}], bands: [[lo, hi]], fixedY?: [lo, hi]}
+ */
+
+(function () {
+  "use strict";
+
+  var DATA = window.FRANKA_IK_DATA || {};
+  var COLORS = ["#08519c", "#cb181d", "#238b45", "#f16913", "#6a51a3", "#0c7489", "#8c510a"];
+  var GRID = "#e2e2de";
+  var AXIS = "#8a8a85";
+  var INK = "#1c1c1c";
+  var MUTED = "#6b6b6b";
+  var FEASIBLE_FILL = "rgba(199, 233, 192, 0.5)";
+
+  // ------------------------------------------------------------------ //
+  // canvas helpers
+  // ------------------------------------------------------------------ //
+
+  function setupCanvas(canvas) {
+    var ratio = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var width = Math.max(1, Math.round(rect.width));
+    var height = Math.max(1, Math.round(rect.height));
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    return { ctx: ctx, width: width, height: height };
+  }
+
+  function text(ctx, str, x, y, opts) {
+    opts = opts || {};
+    ctx.save();
+    ctx.font = (opts.size || 11) + "px -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.fillStyle = opts.color || INK;
+    ctx.textAlign = opts.align || "left";
+    ctx.textBaseline = opts.baseline || "alphabetic";
+    if (opts.rotate) {
+      ctx.translate(x, y);
+      ctx.rotate(opts.rotate);
+      ctx.fillText(str, 0, 0);
+    } else {
+      ctx.fillText(str, x, y);
+    }
+    ctx.restore();
+  }
+
+  function niceTicks(min, max, count) {
+    if (!(max > min)) { return [min]; }
+    var span = max - min;
+    var rawStep = span / Math.max(1, count);
+    var magnitude = Math.pow(10, Math.floor(Math.log(rawStep) / Math.LN10));
+    var candidates = [1, 2, 2.5, 5, 10];
+    var step = magnitude * 10;
+    for (var i = 0; i < candidates.length; i += 1) {
+      if (magnitude * candidates[i] >= rawStep) { step = magnitude * candidates[i]; break; }
+    }
+    var ticks = [];
+    var first = Math.ceil(min / step) * step;
+    for (var v = first; v <= max + step * 1e-6; v += step) {
+      ticks.push(Math.abs(v) < step * 1e-6 ? 0 : v);
+    }
+    return ticks;
+  }
+
+  function isNum(value) {
+    return typeof value === "number" && isFinite(value);
+  }
+
+  // ------------------------------------------------------------------ //
+  // multi-panel chart
+  // ------------------------------------------------------------------ //
+
+  function drawChart(canvas, data) {
+    var view = setupCanvas(canvas);
+    var ctx = view.ctx;
+    var panels = data.panels || [];
+    if (!panels.length) { return; }
+
+    var padLeft = 62;
+    var padRight = 16;
+    var padTop = 18;
+    var padBottom = 46;
+    var gap = 28;
+    var plotWidth = view.width - padLeft - padRight;
+    var plotHeight = (view.height - padTop - padBottom - gap * (panels.length - 1)) / panels.length;
+    if (plotWidth < 40 || plotHeight < 30) { return; }
+
+    panels.forEach(function (panel, index) {
+      var top = padTop + index * (plotHeight + gap);
+      var bottom = top + plotHeight;
+
+      var xs = panel.xValues || [];
+      var xMin = xs.length ? xs[0] : 0;
+      var xMax = xs.length ? xs[xs.length - 1] : 1;
+      var xTicks = niceTicks(xMin, xMax, 8);
+      var tickStep = xTicks.length > 1 ? xTicks[1] - xTicks[0] : (xMax - xMin);
+      function xOf(value) { return padLeft + ((value - xMin) / (xMax - xMin)) * plotWidth; }
+
+      var yMin = Infinity;
+      var yMax = -Infinity;
+      if (panel.bars) {
+        panel.bars.forEach(function (bar) { yMin = Math.min(yMin, 0, bar.y); yMax = Math.max(yMax, 0, bar.y); });
+      }
+      (panel.series || []).forEach(function (series) {
+        series.values.forEach(function (value) {
+          if (!isNum(value)) { return; }
+          yMin = Math.min(yMin, value);
+          yMax = Math.max(yMax, value);
+        });
+      });
+      if (!isFinite(yMin) || !isFinite(yMax)) { yMin = -1; yMax = 1; }
+      if (panel.fixedY) { yMin = panel.fixedY[0]; yMax = panel.fixedY[1]; }
+      var span = yMax - yMin;
+      if (span < 1e-12) { span = 1; }
+      yMin -= span * 0.1;
+      yMax += span * 0.1;
+      function yOf(value) { return bottom - ((value - yMin) / (yMax - yMin)) * plotHeight; }
+
+      ctx.fillStyle = "#f4f4f1";
+      ctx.fillRect(padLeft, top, plotWidth, plotHeight);
+      (panel.bands || []).forEach(function (band) {
+        ctx.fillStyle = FEASIBLE_FILL;
+        var left = xOf(band[0]);
+        ctx.fillRect(left, top, xOf(band[1]) - left, plotHeight);
+      });
+
+      ctx.strokeStyle = GRID;
+      ctx.lineWidth = 1;
+      var yTicks = niceTicks(yMin, yMax, 4);
+      ctx.beginPath();
+      yTicks.forEach(function (value) {
+        ctx.moveTo(padLeft, Math.round(yOf(value)) + 0.5);
+        ctx.lineTo(padLeft + plotWidth, Math.round(yOf(value)) + 0.5);
+      });
+      ctx.stroke();
+      yTicks.forEach(function (value) {
+        text(ctx, value.toFixed(Math.abs(yMax - yMin) < 4 ? 2 : 0), padLeft - 6, yOf(value) + 3,
+             { align: "right", size: 10, color: MUTED });
+      });
+
+      ctx.strokeStyle = "#c8c8c2";
+      ctx.beginPath();
+      ctx.moveTo(padLeft, yOf(0) + 0.5);
+      ctx.lineTo(padLeft + plotWidth, yOf(0) + 0.5);
+      ctx.stroke();
+
+      // optional bar series, for the coverage and histogram panels
+      (panel.bars || []).forEach(function (bar, barIndex) {
+        var half = 0.5 * (panel.barWidth || 0.6);
+        // clamp: a bar centred on the first or last sample would otherwise
+        // stick out of the plot area by half its width
+        var left = Math.max(padLeft, Math.min(xOf(bar.x - half), padLeft + plotWidth));
+        var right = Math.max(padLeft, Math.min(xOf(bar.x + half), padLeft + plotWidth));
+        var topY = yOf(bar.y);
+        var zeroY = yOf(0);
+        ctx.fillStyle = bar.color || COLORS[barIndex % COLORS.length];
+        ctx.fillRect(left, Math.min(topY, zeroY), right - left, Math.abs(zeroY - topY));
+        if (bar.label) {
+          text(ctx, bar.label, 0.5 * (left + right), topY - 4,
+               { align: "center", size: 10, color: INK });
+        }
+      });
+
+      (panel.series || []).forEach(function (series, seriesIndex) {
+        ctx.strokeStyle = series.color || COLORS[seriesIndex % COLORS.length];
+        ctx.lineWidth = series.width || 1.8;
+        if (series.dashed) { ctx.setLineDash([6, 4]); }
+        ctx.beginPath();
+        var started = false;
+        xs.forEach(function (x, i) {
+          var value = series.values[i];
+          if (!isNum(value)) { started = false; return; }
+          var px = xOf(x);
+          var py = yOf(value);
+          if (!started) { ctx.moveTo(px, py); started = true; } else { ctx.lineTo(px, py); }
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      (panel.markers || []).forEach(function (marker, markerIndex) {
+        // a marker can be off scale, e.g. tan(theta4/2) as theta4 approaches
+        // 180 degrees; pin it to the edge instead of drawing outside the canvas
+        var raw = xOf(marker.x);
+        var pinned = Math.max(padLeft + 2, Math.min(raw, padLeft + plotWidth - 2));
+        ctx.strokeStyle = marker.color || "#08519c";
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(pinned, top);
+        ctx.lineTo(pinned, bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (marker.label) {
+          var above = raw < padLeft + plotWidth * 0.5;
+          text(ctx, marker.label,
+               pinned + (above ? 4 : -4),
+               top + 12 + 13 * markerIndex,
+               { size: 10, color: marker.color, align: above ? "left" : "right" });
+        }
+      });
+
+      ctx.strokeStyle = AXIS;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(padLeft + 0.5, top + 0.5, plotWidth - 1, plotHeight - 1);
+      text(ctx, panel.title || "", padLeft + 6, top + 14, { size: 11 });
+      if (panel.yLabel) {
+        text(ctx, panel.yLabel, 12, top + plotHeight / 2,
+             { size: 10, color: MUTED, rotate: -Math.PI / 2 });
+      }
+
+      if (index === panels.length - 1) {
+        ctx.strokeStyle = AXIS;
+        ctx.beginPath();
+        xTicks.forEach(function (value) {
+          ctx.moveTo(xOf(value), bottom);
+          ctx.lineTo(xOf(value), bottom + 4);
+        });
+        ctx.stroke();
+        xTicks.forEach(function (value) {
+          var decimals = tickStep < 0.1 ? 2 : (tickStep < 1 ? 1 : 0);
+          text(ctx, value.toFixed(decimals), xOf(value), bottom + 17,
+               { align: "center", size: 10, color: MUTED });
+        });
+        text(ctx, panel.xLabel || "", padLeft + plotWidth / 2, bottom + 36,
+             { align: "center", size: 11, color: MUTED });
+      }
+    });
+
+    drawLegend(panels);
+  }
+
+  function drawLegend(panels) {
+    var host = document.getElementById("legend");
+    if (!host) { return; }
+    host.innerHTML = "";
+    var seen = {};
+    panels.forEach(function (panel) {
+      (panel.series || []).forEach(function (series, seriesIndex) {
+        if (!series.label || seen[series.label]) { return; }
+        seen[series.label] = true;
+        var span = document.createElement("span");
+        var swatch = document.createElement("i");
+        swatch.style.background = series.color || COLORS[seriesIndex % COLORS.length];
+        span.appendChild(swatch);
+        span.appendChild(document.createTextNode(series.label));
+        host.appendChild(span);
+      });
+    });
+  }
+
+  // ------------------------------------------------------------------ //
+  // 3D scene: several arm configurations at once
+  // ------------------------------------------------------------------ //
+
+  function Scene(canvas) {
+    this.canvas = canvas;
+    this.yaw = -0.75;
+    this.pitch = 0.30;
+    this.zoom = 1.0;
+    this.dragging = false;
+    this.lastX = 0;
+    this.lastY = 0;
+    this.visible = {};
+    this.bounds = null;
+    this.hidden = {};
+    this.attach();
+  }
+
+  Scene.prototype.attach = function () {
+    var self = this;
+    this.canvas.addEventListener("mousedown", function (event) {
+      self.dragging = true;
+      self.lastX = event.clientX;
+      self.lastY = event.clientY;
+    });
+    window.addEventListener("mouseup", function () { self.dragging = false; });
+    window.addEventListener("mousemove", function (event) {
+      if (!self.dragging) { return; }
+      self.yaw += (event.clientX - self.lastX) * 0.01;
+      self.pitch += (event.clientY - self.lastY) * 0.01;
+      self.pitch = Math.max(-1.45, Math.min(1.45, self.pitch));
+      self.lastX = event.clientX;
+      self.lastY = event.clientY;
+      self.render();
+    });
+    this.canvas.addEventListener("wheel", function (event) {
+      event.preventDefault();
+      self.zoom *= event.deltaY < 0 ? 1.08 : 1 / 1.08;
+      self.zoom = Math.max(0.35, Math.min(4, self.zoom));
+      self.render();
+    }, { passive: false });
+    window.addEventListener("resize", function () { self.render(); });
+  };
+
+  Scene.prototype.setHidden = function (index, hidden) {
+    this.hidden[index] = hidden;
+    this.render();
+  };
+
+  /** Bounding box and auto-fit scale over everything that may be drawn. */
+  Scene.prototype.fit = function (view) {
+    if (!this.bounds) {
+      var min = [Infinity, Infinity, Infinity];
+      var max = [-Infinity, -Infinity, -Infinity];
+      var collections = (DATA.arms || []).map(function (arm) { return arm.points; });
+      if (DATA.target) { collections.push(DATA.target.points); }
+      collections.forEach(function (frames) {
+        (frames || []).forEach(function (point) {
+          for (var axis = 0; axis < 3; axis += 1) {
+            if (!isNum(point[axis])) { continue; }
+            if (point[axis] < min[axis]) { min[axis] = point[axis]; }
+            if (point[axis] > max[axis]) { max[axis] = point[axis]; }
+          }
+        });
+      });
+      var centre = [0, 0, 0];
+      var extent = 0.2;
+      for (var axis2 = 0; axis2 < 3; axis2 += 1) {
+        if (!isFinite(min[axis2]) || !isFinite(max[axis2])) { min[axis2] = -0.5; max[axis2] = 0.5; }
+        centre[axis2] = 0.5 * (min[axis2] + max[axis2]);
+        extent = Math.max(extent, max[axis2] - min[axis2]);
+      }
+      this.bounds = { centre: centre, extent: extent };
+    }
+    var span = Math.min(view.width, view.height) * 0.62;
+    return {
+      centre: this.bounds.centre,
+      extent: this.bounds.extent,
+      scale: (span / this.bounds.extent) * this.zoom,
+    };
+  };
+
+  Scene.prototype.project = function (point, view, centre, scale) {
+    var cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    var cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
+    var x = point[0] - centre[0];
+    var y = point[1] - centre[1];
+    var z = point[2] - centre[2];
+    var x1 = x * cy + y * sy;
+    var y1 = -x * sy + y * cy;
+    var y2 = y1 * cp - z * sp;
+    var z2 = y1 * sp + z * cp;
+    return [view.width / 2 + x1 * scale, view.height * 0.58 - z2 * scale, y2];
+  };
+
+  Scene.prototype.render = function () {
+    var view = setupCanvas(this.canvas);
+    var ctx = view.ctx;
+    var fit = this.fit(view);
+    var centre = fit.centre;
+    var scale = fit.scale;
+
+    // ground grid at z = 0
+    var gridHalf = Math.max(0.4, fit.extent * 0.6);
+    ctx.strokeStyle = "#e6e6e0";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (var g = -gridHalf; g <= gridHalf * 1.001; g += gridHalf / 4) {
+      var a = this.project([g, -gridHalf, 0], view, centre, scale);
+      var b = this.project([g, gridHalf, 0], view, centre, scale);
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+      var c = this.project([-gridHalf, g, 0], view, centre, scale);
+      var d = this.project([gridHalf, g, 0], view, centre, scale);
+      ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
+    }
+    ctx.stroke();
+
+    var self = this;
+
+    function drawChain(points, color, width, alpha, dash) {
+      var projected = points.map(function (point) {
+        return self.project(point, view, centre, scale);
+      });
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = width;
+      ctx.lineJoin = "round";
+      if (dash) { ctx.setLineDash(dash); }
+      ctx.beginPath();
+      ctx.moveTo(projected[0][0], projected[0][1]);
+      for (var i = 1; i < projected.length; i += 1) {
+        ctx.lineTo(projected[i][0], projected[i][1]);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      projected.forEach(function (point, index) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(point[0], point[1], index === 0 ? 4 : 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    // the configuration the pose came from, drawn first as a reference
+    if (DATA.target) {
+      drawChain(DATA.target.points, "#111111", 1.4, 0.85, [6, 5]);
+    }
+
+    // one polyline per branch
+    (DATA.arms || []).forEach(function (arm, index) {
+      if (self.hidden[index]) { return; }
+      drawChain(arm.points, arm.color || COLORS[index % COLORS.length],
+                arm.recoversTarget ? 3.4 : 2.0,
+                arm.recoversTarget ? 1.0 : 0.62, null);
+    });
+
+    // the target tool position
+    if (DATA.tool) {
+      var tip = this.project(DATA.tool, view, centre, scale);
+      ctx.fillStyle = "#000000";
+      ctx.beginPath();
+      ctx.arc(tip[0], tip[1], 5, 0, Math.PI * 2);
+      ctx.fill();
+      text(ctx, "target pose", tip[0] + 8, tip[1] - 6, { size: 10, color: "#111111" });
+    }
+
+    // world axes at the origin
+    var origin = this.project([0, 0, 0], view, centre, scale);
+    var axisLength = Math.max(0.08, fit.extent * 0.2);
+    [["x", "#cb181d", [axisLength, 0, 0]], ["y", "#238b45", [0, axisLength, 0]],
+     ["z", "#08519c", [0, 0, axisLength]]].forEach(function (axis) {
+      var tip2 = self.project(axis[2], view, centre, scale);
+      ctx.strokeStyle = axis[1];
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(origin[0], origin[1]);
+      ctx.lineTo(tip2[0], tip2[1]);
+      ctx.stroke();
+      text(ctx, axis[0], tip2[0] + 3, tip2[1], { size: 10, color: axis[1] });
+    });
+
+    text(ctx, "drag to orbit, wheel to zoom", 10, view.height - 10, { size: 10, color: MUTED });
+  };
+
+  // ------------------------------------------------------------------ //
+  // page wiring
+  // ------------------------------------------------------------------ //
+
+  function buildTable(host, table) {
+    if (!table || !table.rows || !table.rows.length) { return; }
+    var html = "<table><thead><tr>";
+    table.headers.forEach(function (header) { html += "<th>" + header + "</th>"; });
+    html += "</tr></thead><tbody>";
+    table.rows.forEach(function (row) {
+      html += "<tr>";
+      row.forEach(function (cell) {
+        var cls = "";
+        if (typeof cell === "string" && cell.indexOf("!") === 0) { cls = ' class="bad"'; cell = cell.slice(1); }
+        html += "<td" + cls + ">" + cell + "</td>";
+      });
+      html += "</tr>";
+    });
+    html += "</tbody></table>";
+    host.innerHTML = html;
+  }
+
+  function buildNotes(host, notes) {
+    if (!notes || !notes.length) { return; }
+    host.innerHTML = notes.map(function (note) {
+      var ok = note.indexOf("OK:") === 0;
+      return '<div class="note' + (ok ? " ok" : "") + '">' + note.replace(/^OK:\s*/, "") + "</div>";
+    }).join("");
+  }
+
+  function buildBranchToggles(host, scene) {
+    if (!host || !DATA.toggleArms || !DATA.arms) { return; }
+    host.innerHTML = "";
+    DATA.arms.forEach(function (arm, index) {
+      var label = document.createElement("label");
+      var box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = true;
+      box.addEventListener("change", function () { scene.setHidden(index, !box.checked); });
+      var swatch = document.createElement("i");
+      swatch.style.background = arm.color || COLORS[index % COLORS.length];
+      label.appendChild(box);
+      label.appendChild(swatch);
+      label.appendChild(document.createTextNode(
+        arm.label + (arm.recoversTarget ? "  *target*" : "")
+      ));
+      host.appendChild(label);
+    });
+  }
+
+  function main() {
+    var sceneCanvas = document.getElementById("scene");
+    var chartCanvas = document.getElementById("chart");
+    var scene = sceneCanvas ? new Scene(sceneCanvas) : null;
+    if (scene) { scene.render(); }
+    if (chartCanvas) { drawChart(chartCanvas, DATA); }
+    buildTable(document.getElementById("table"), DATA.table);
+    buildNotes(document.getElementById("notes"), DATA.notes);
+    buildBranchToggles(document.getElementById("branches"), scene);
+
+    window.addEventListener("resize", function () {
+      if (scene) { scene.render(); }
+      if (chartCanvas) { drawChart(chartCanvas, DATA); }
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", main);
+  } else {
+    main();
+  }
+})();
+
+</script>
+</body>
+</html>
