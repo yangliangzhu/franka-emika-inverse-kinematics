@@ -1,0 +1,157 @@
+/* Interactive report styling for the franka_ik demos.
+ *
+ * Deliberately dependency-free and offline-safe: no web fonts, no CDN, no
+ * framework.  The pages must open correctly straight from the file system.
+ */
+
+:root {
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --ink: #1c1c1c;
+  --muted: #6b6b6b;
+  --line: #d8d8d4;
+  --accent: #08519c;
+  --limit: #cb181d;
+  --feasible: #c7e9c0;
+  --infeasible: #e4e4e0;
+  --warn-bg: #fff4e5;
+  --warn-border: #f0a13a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 0 3rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC",
+    "PingFang SC", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  padding: 1.1rem 1.5rem 0.9rem;
+}
+
+header h1 { margin: 0 0 0.25rem; font-size: 1.35rem; }
+header p { margin: 0; color: var(--muted); font-size: 0.9rem; max-width: 70rem; }
+
+nav.pages {
+  margin-top: 0.7rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+nav.pages a {
+  text-decoration: none;
+  color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.15rem 0.75rem;
+  font-size: 0.85rem;
+  background: var(--panel);
+}
+
+nav.pages a.current { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+main { padding: 1.2rem 1.5rem 0; max-width: 1500px; margin: 0 auto; }
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(420px, 1.35fr);
+  gap: 1.1rem;
+  align-items: start;
+}
+
+@media (max-width: 1050px) { .grid { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.85rem 1rem 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.card h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+.card h3 { margin: 0.9rem 0 0.35rem; font-size: 0.92rem; color: var(--muted); font-weight: 600; }
+
+canvas { display: block; width: 100%; border-radius: 6px; }
+
+canvas.scene { height: 430px; background: #fbfbfa; border: 1px solid var(--line); cursor: grab; }
+canvas.scene:active { cursor: grabbing; }
+canvas.chart { height: 260px; }
+canvas.chart.tall { height: 420px; }
+canvas.chart.xtall { height: 620px; }
+
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.7rem; }
+
+.controls label { font-size: 0.85rem; color: var(--muted); }
+
+input[type="range"] { flex: 1 1 220px; min-width: 160px; accent-color: var(--accent); }
+
+button, select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:hover { border-color: var(--accent); }
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
+.readout div { background: #f2f4f7; border-radius: 6px; padding: 0.25rem 0.6rem; }
+.readout b { color: var(--accent); font-weight: 600; }
+
+table { border-collapse: collapse; width: 100%; font-size: 0.84rem; }
+th, td { border-bottom: 1px solid var(--line); padding: 0.28rem 0.45rem; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+td.bad { color: var(--limit); font-weight: 600; }
+td.psi { font-variant-numeric: tabular-nums; }
+
+.note {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.86rem;
+  margin: 0.8rem 0 0;
+}
+
+.note.ok { background: #eef7ee; border-color: #7cb87c; }
+.note h3 { margin: 0 0 0.3rem; color: inherit; }
+.note ul { margin: 0.3rem 0 0; padding-left: 1.1rem; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 0.75rem; font-size: 0.8rem; margin-top: 0.4rem; }
+.legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend i.band { height: 12px; opacity: 0.8; }
+
+/* branch toggles: one checkbox per arm drawn in the 3D scene */
+.branches { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; margin-top: 0.6rem; font-size: 0.82rem; }
+.branches label { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+.branches i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.branches input { margin: 0; accent-color: var(--accent); }
+.branches .dim { opacity: 0.45; }
+
+footer { max-width: 1500px; margin: 2rem auto 0; padding: 0 1.5rem; color: var(--muted); font-size: 0.82rem; }
+footer code { background: #efefec; padding: 0.05rem 0.3rem; border-radius: 4px; }
