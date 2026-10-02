@@ -155,3 +155,38 @@ td.psi { font-variant-numeric: tabular-nums; }
 
 footer { max-width: 1500px; margin: 2rem auto 0; padding: 0 1.5rem; color: var(--muted); font-size: 0.82rem; }
 footer code { background: #efefec; padding: 0.05rem 0.3rem; border-radius: 4px; }
+
+/* The joint-7 scrubber on the branches page: a slider, a play button and a label.
+   The browser has no solver -- the frames are pre-computed and embedded -- so this
+   only selects among them. */
+.motion {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+.motion input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 8rem;
+  accent-color: #08519c;
+}
+.motion button {
+  font: inherit;
+  padding: 0.15rem 0.7rem;
+  border: 1px solid #cfcfc8;
+  border-radius: 5px;
+  background: #fbfbf8;
+  cursor: pointer;
+}
+.motion button:hover { background: #f1f1ec; }
+.motion-label {
+  font-variant-numeric: tabular-nums;
+  color: #6b6b63;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.motion-readout {
+  margin: 0.25rem 0 0;
+  color: #6b6b63;
+  font-size: 0.82rem;
+}

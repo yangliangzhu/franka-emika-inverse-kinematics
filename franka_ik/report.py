@@ -103,6 +103,8 @@ def _page(file_name: str, title: str, subtitle: str, data: Dict) -> str:
     <section class="card">
       <h2>arm configurations</h2>
       <canvas id="scene" class="scene"></canvas>
+      <div id="motion" class="motion"></div>
+      <p id="motion-readout" class="motion-readout"></p>
       <div id="branches" class="branches"></div>
     </section>
     <section class="card">
@@ -228,6 +230,72 @@ def _quadratic_panel(
 # --------------------------------------------------------------------------- #
 # pages
 # --------------------------------------------------------------------------- #
+#: Colours for the two elbow roots on the branches page's sweep: two shades each, so
+#: the four configurations of one root are still distinguishable from one another.
+_ROOT_COLORS = {
+    "plus": ("#08519c", "#6baed6"),
+    "minus": ("#e6550d", "#fd8d3c"),
+}
+
+
+def _branch_track(
+    pose: np.ndarray,
+    q7: float,
+    target: Optional[Sequence[float]],
+    geometry: EquivalentGeometry,
+    *,
+    frames: int = 61,
+    half_width_deg: float = 60.0,
+    within_limits_only: bool = True,
+) -> Dict:
+    """A joint-7 sweep for the branches page's scrubber.
+
+    The browser cannot solve the closed form, so the sweep is pre-computed here and
+    embedded: every frame carries the configurations that reach the pose at one
+    joint-7 value, and the slider simply selects a frame.  This is the same thing the
+    sibling S-R-S study's HTML demos do, and it is what makes the page *move*.
+
+    Frames with no in-limit solution are dropped rather than embedded as empty, and
+    the joint-7 range is narrowed to the part that has any, so the slider never sits
+    on a blank pose.
+
+    Args:
+        pose: 4x4 homogeneous flange pose.
+        q7: The page's own joint 7, always included in the sweep.
+        target: The configuration the pose came from, for the ``TARGET`` flag.
+        geometry: Geometric parameters.
+        frames: Joint-7 values to try; the ones without a solution are dropped.
+        half_width_deg: Half-width of the sweep around ``q7``, in degrees.
+        within_limits_only: Keep only in-limit configurations.
+
+    Returns:
+        ``{"q7Deg": [...], "parts": [[arm, ...], ...], "index": i}`` where ``index``
+        selects the frame closest to ``q7``.
+    """
+    span = np.radians(half_width_deg)
+    values = np.linspace(q7 - span, q7 + span, frames)
+    parts: List[List[Dict]] = []
+    kept: List[float] = []
+    for value in values:
+        found = solve(pose, float(value), geometry=geometry, within_limits_only=within_limits_only)
+        if not found:
+            continue
+        kept.append(float(math.degrees(value)))
+        frame_arms = [_arm_dict(solution, index, target) for index, solution in enumerate(found)]
+        # Colour by *elbow root*, not by position in the list.  The list order shifts
+        # as joint 7 moves, so index colours make an arm change colour mid-sweep; and
+        # the roots are the thing this page is about -- blue is the half the published
+        # code keeps, orange the half it drops.
+        for arm in frame_arms:
+            shade = 0 if "phi+" in arm["label"] else 1
+            arm["color"] = _ROOT_COLORS["plus" if arm["label"].startswith("q4+") else "minus"][shade]
+        parts.append(frame_arms)
+    if not kept:  # pragma: no cover - a pose with no solution has no track to show
+        return {"q7Deg": [], "parts": [], "index": 0}
+    closest = min(range(len(kept)), key=lambda index: abs(kept[index] - math.degrees(q7)))
+    return {"q7Deg": kept, "parts": parts, "index": closest}
+
+
 def build_branches_page(
     pose: np.ndarray,
     q7: float,
@@ -280,6 +348,9 @@ def build_branches_page(
             else {"points": _chain(target), "qDeg": [round(math.degrees(v), 4) for v in target]}
         ),
         "tool": [round(float(value), 6) for value in position],
+        # The scrubber's frames.  Only the 3D scene and the readout follow it -- the
+        # table and the quadratic panel describe the page's own joint 7.
+        "motion": _branch_track(pose, q7, target, geometry),
         "toggleArms": True,
         "panels": [_quadratic_panel(distance, geometry)],
         "table": {
@@ -298,6 +369,11 @@ def build_branches_page(
             "The curve is the elbow quadratic of STEP2 of the derivation, drawn against "
             "<code>x = tan(theta4/2)</code>. Its <b>two</b> roots are marked. The published "
             "implementation kept only the positive one, which is exactly why it saw four "
+            "The scrubber sweeps joint 7 across the values that reach this pose, and the "
+            "3D view follows: <b>blue</b> arms are on the '+' elbow root, the half the "
+            "published code keeps, and <b>orange</b> ones are on the '-' root it never "
+            "evaluates. The table and the curve do not follow the scrubber -- they "
+            "describe the joint 7 printed above them.",
             "branches instead of eight. Toggle the arms below the 3D view to see which "
             "root each one came from: the branch labels read <code>q4+</code> / "
             "<code>q4-</code> for the root, <code>phi+</code> / <code>phi-</code> for the "

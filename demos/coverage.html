@@ -163,6 +163,41 @@ td.psi { font-variant-numeric: tabular-nums; }
 footer { max-width: 1500px; margin: 2rem auto 0; padding: 0 1.5rem; color: var(--muted); font-size: 0.82rem; }
 footer code { background: #efefec; padding: 0.05rem 0.3rem; border-radius: 4px; }
 
+/* The joint-7 scrubber on the branches page: a slider, a play button and a label.
+   The browser has no solver -- the frames are pre-computed and embedded -- so this
+   only selects among them. */
+.motion {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+.motion input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 8rem;
+  accent-color: #08519c;
+}
+.motion button {
+  font: inherit;
+  padding: 0.15rem 0.7rem;
+  border: 1px solid #cfcfc8;
+  border-radius: 5px;
+  background: #fbfbf8;
+  cursor: pointer;
+}
+.motion button:hover { background: #f1f1ec; }
+.motion-label {
+  font-variant-numeric: tabular-nums;
+  color: #6b6b63;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.motion-readout {
+  margin: 0.25rem 0 0;
+  color: #6b6b63;
+  font-size: 0.82rem;
+}
+
 </style>
 </head>
 <body>
@@ -176,6 +211,8 @@ footer code { background: #efefec; padding: 0.05rem 0.3rem; border-radius: 4px; 
     <section class="card">
       <h2>arm configurations</h2>
       <canvas id="scene" class="scene"></canvas>
+      <div id="motion" class="motion"></div>
+      <p id="motion-readout" class="motion-readout"></p>
       <div id="branches" class="branches"></div>
     </section>
     <section class="card">
@@ -533,7 +570,7 @@ window.FRANKA_IK_DATA = {"kind":"coverage","arms":[],"target":null,"tool":null,"
     if (!this.bounds) {
       var min = [Infinity, Infinity, Infinity];
       var max = [-Infinity, -Infinity, -Infinity];
-      var collections = (DATA.arms || []).map(function (arm) { return arm.points; });
+      var collections = motionArms().map(function (arm) { return arm.points; });
       if (DATA.target) { collections.push(DATA.target.points); }
       collections.forEach(function (frames) {
         (frames || []).forEach(function (point) {
@@ -629,7 +666,7 @@ window.FRANKA_IK_DATA = {"kind":"coverage","arms":[],"target":null,"tool":null,"
     }
 
     // one polyline per branch
-    (DATA.arms || []).forEach(function (arm, index) {
+    motionArms().forEach(function (arm, index) {
       if (self.hidden[index]) { return; }
       drawChain(arm.points, arm.color || COLORS[index % COLORS.length],
                 arm.recoversTarget ? 3.4 : 2.0,
@@ -714,6 +751,95 @@ window.FRANKA_IK_DATA = {"kind":"coverage","arms":[],"target":null,"tool":null,"
     });
   }
 
+  // ------------------------------------------------------------------ //
+  // motion track: scrub joint 7 through pre-computed frames
+  // ------------------------------------------------------------------ //
+  var frame = 0;
+
+  /** The arms to draw: the scrubbed frame when there is one, else the page's own. */
+  function motionArms() {
+    var motion = DATA.motion;
+    if (!motion || !motion.parts || !motion.parts.length) { return DATA.arms || []; }
+    return motion.parts[Math.max(0, Math.min(frame, motion.parts.length - 1))];
+  }
+
+  /** One line describing the scrubbed frame. */
+  function motionReadout() {
+    var arms = motionArms();
+    var targets = arms.filter(function (arm) { return arm.recoversTarget; });
+    var published = targets.filter(function (arm) {
+      return arm.label.indexOf("q4+") === 0;
+    });
+    return "this frame: " + arms.length + " in-limit configuration(s); "
+      + targets.length + " of them the generating one, "
+      + published.length + " of those on the published '+' elbow root";
+  }
+
+  /**
+   * The joint-7 scrubber: a slider over the pre-computed frames and a play button.
+   *
+   * The browser cannot solve the closed form, so the sweep is pre-computed by
+   * ``franka_ik.report`` and embedded; moving the slider selects a frame and the 3D
+   * view and the readout follow.  The table and the quadratic panel deliberately do
+   * *not* follow: they describe the page's own joint 7, which the caption says.
+   */
+  function buildMotion(host, scene, readout) {
+    var motion = DATA.motion;
+    if (!host || !motion || !motion.parts || motion.parts.length < 2) { return null; }
+    host.innerHTML = "";
+
+    var slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = String(motion.parts.length - 1);
+    slider.step = "1";
+    slider.value = String(motion.index || 0);
+    slider.id = "q7";
+    frame = Number(slider.value);
+
+    var label = document.createElement("span");
+    label.className = "motion-label";
+
+    var play = document.createElement("button");
+    play.type = "button";
+    play.textContent = "play";
+
+    var timer = null;
+    function paint() {
+      label.textContent = "joint 7 = " + motion.q7Deg[frame].toFixed(2) + " deg, "
+        + motionArms().length + " configuration(s)";
+      if (readout) { readout.textContent = motionReadout(); }
+    }
+    function apply() {
+      scene.render();
+      paint();
+    }
+    slider.addEventListener("input", function () {
+      frame = Number(slider.value);
+      apply();
+    });
+    play.addEventListener("click", function () {
+      if (timer) {
+        window.clearInterval(timer);
+        timer = null;
+        play.textContent = "play";
+        return;
+      }
+      play.textContent = "pause";
+      timer = window.setInterval(function () {
+        frame = (frame + 1) % motion.parts.length;
+        slider.value = String(frame);
+        apply();
+      }, 320);
+    });
+
+    host.appendChild(slider);
+    host.appendChild(play);
+    host.appendChild(label);
+    paint();
+    return { slider: slider, play: play, label: label };
+  }
+
   function main() {
     var sceneCanvas = document.getElementById("scene");
     var chartCanvas = document.getElementById("chart");
@@ -722,6 +848,8 @@ window.FRANKA_IK_DATA = {"kind":"coverage","arms":[],"target":null,"tool":null,"
     if (chartCanvas) { drawChart(chartCanvas, DATA); }
     buildTable(document.getElementById("table"), DATA.table);
     buildNotes(document.getElementById("notes"), DATA.notes);
+    var motionHost = document.getElementById("motion");
+    if (motionHost) { buildMotion(motionHost, scene, document.getElementById("motion-readout")); }
     buildBranchToggles(document.getElementById("branches"), scene);
 
     window.addEventListener("resize", function () {
