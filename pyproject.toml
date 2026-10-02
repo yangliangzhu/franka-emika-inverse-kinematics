@@ -7,7 +7,7 @@ name = "franka-ik"
 version = "0.2.0"
 description = "Analytical inverse kinematics for the Franka Emika Panda, by reduction to an equivalent S-R-S arm"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "yangliangzhu", email = "yangliangzhu@nervrobot.com" }]
 keywords = [
@@ -31,16 +31,43 @@ dependencies = ["numpy>=1.21", "matplotlib>=3.5"]
 # CasADi is not needed by the library -- the solver is pure NumPy -- but it is
 # what `original/` uses, so it is required to run the branch-by-branch
 # cross-check in `tests/test_branches.py` against the published implementation.
-reference = ["casadi>=3.6"]
+# The upper bound is load-bearing, not caution.  `original/` is a 2020/2023
+# historical record and is never edited, and it calls `ca.SX_eye`, which CasADi
+# **3.8 removed**: with 3.8.1 installed, every cross-check test errors in
+# `original/panda.py` before it reaches the first assertion (measured: 88 passed,
+# 15 errors).  `docs/limitations.md` §5 already notes that `Panda.fk` returns a
+# symbolic `SX`; the ceiling keeps that file importable, which is the whole reason
+# the record is kept.
+reference = ["casadi>=3.6,<3.8"]
+
+# The interactive 3D viewers in `examples/07-11_swift_*.py` and the tests that
+# drive `franka_ik.swift_viz`.  `rtb-data`, pulled in by roboticstoolbox, already
+# bundles a Panda description, so nothing here downloads a robot at runtime.
+# The `franka_description` arm ships as xacro rather than URDF, so a checkout of
+# it is *not* sufficient on its own: point `FRANKA_IK_URDF` at a URDF if you have
+# one, and the viewers draw the real bodies instead of the capsule skeleton.
+viz = [
+    "roboticstoolbox-python>=1.4,<2",
+    "rtb-data>=2.0",
+    "spatialgeometry>=1.4",
+    "spatialmath-python>=1.1",
+    "swift-sim>=2.0",
+]
 
 # PEP 735 dependency group: `uv sync` installs it by default, and it is the
 # environment the documented commands assume.
 [dependency-groups]
 dev = [
     "pytest>=7.0",
-    "casadi>=3.6",
+    "casadi>=3.6,<3.8",  # see the `reference` extra: 3.8 breaks original/
     "ruff>=0.6",
 ]
+# Note for anyone moving between environments: the linter is *not* pinned, and
+# different versions disagree.  Ruff 0.16 turns on B905 (`zip()` without
+# `strict=`), which flagged 9 call sites that the distribution's older ruff
+# accepted -- and the environment is a system-site-packages venv, so which ruff
+# you get depends on how the venv was built.  Run `ruff check .` before trusting
+# a green local run.
 
 [tool.setuptools.packages.find]
 include = ["franka_ik*"]
@@ -50,12 +77,27 @@ franka_ik = ["web/*.css", "web/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+# The two `-p no:` entries disable a ROS Humble environment bug, not a local one.
+# `launch_testing`'s pytest plugin imports *every* candidate test module from
+# `pytest_collect_file` to look for `generate_test_description`
+# (`launch_testing.pytest.hooks.find_launch_test_entrypoint`) and catches only
+# `SyntaxError` there.  A module-level `pytest.importorskip(...)` raises
+# `Skipped`, which derives from `BaseException`, so it escapes that hook and unwinds
+# the enclosing directory's `collect()` generator: `tests/` is then reported as
+# `outcome='skipped'` with an empty result, and the *whole* suite collects 0 items --
+# whatever the offending file is, and even when only one file is named on the command
+# line.  That is exactly what `tests/test_swift_viz.py` triggers on a machine with ROS
+# sourced but no `lark`, so the workaround is not optional here.  Blocking both entry
+# points is required: `launch_ros` implements the custom
+# `pytest_launch_collect_makemodule` hookspec that `launch_testing` registers, so
+# blocking only one raises a pluggy PluginValidationError.  Both names are inert
+# without ROS, and this repository has no `launch_test` files.
+addopts = "-ra -p no:launch_testing -p no:launch_ros"
 doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py310"
 # original/ is kept verbatim as the published record; the notebook is a
 # historical artefact.  Rewriting either would destroy the provenance that
 # tests/test_branches.py depends on.
@@ -69,8 +111,8 @@ ignore = [
     "N803",
     "N806",
     "ARG002",
-    # typing.Optional / typing.List are kept for Python 3.9 compatibility and to
-    # match the sibling repositories.
+    # typing.Optional / typing.List are kept to match the sibling repositories,
+    # not for version support: the floor is 3.10 because the `viz` extra needs it.
     "UP006",
     "UP007",
     "UP035",
