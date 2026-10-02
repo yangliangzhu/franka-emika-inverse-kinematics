@@ -3,6 +3,12 @@
 How the Franka Emika Panda — which is *not* an S-R-S arm — is reduced to one and solved in
 closed form, exactly in the four steps of `franka解析反解方法.pdf`.
 
+The same derivation, typeset as a single self-contained HTML page — the formulas as real math
+instead of images, the hand sketches redrawn as vector figures, and rendered screenshots of the
+Panda and of an S-R-S arm (the KUKA iiwa 14) alongside — is
+[`method_illustrated.html`](method_illustrated.html). It needs no network and opens straight from
+the file system.
+
 This document follows the derivation of the handwritten PDF at the repository root
 (`franka解析反解方法.pdf`, four pages: `STEP1`–`STEP4` on pages 1–3, the special-equation
 appendix at the end of page 3, references on page 4). The formulas in that PDF are images, so
