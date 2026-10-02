@@ -18,16 +18,43 @@ Two things are unusual about it, and both shape how it should be edited:
 
 Read `README.md` first, then `docs/method.md`. `docs/limitations.md` is the list of things that
 are known to be imperfect, and is the first place to look when a change seems to break
-something.
+something. `docs/provenance.md` is what keeps the claims honest: what here is original, what is
+not, and which published work got there independently.
+
+## The provenance rule
+
+The method here is **not** novel. He and Liu published the same reduction — joint 7 as the
+redundancy parameter, the elbow solved in two variants, eight branches per pose — at ICRA 2022
+([IEEE Xplore 9646185](https://ieeexplore.ieee.org/abstract/document/9646185),
+[preprint](https://github.com/ffall007/franka_analytical_ik/blob/main/paper_preprint.pdf)). The
+first push here predates their preprint by about eight months (`git show --stat 295c6e0`,
+2021-02-02), but a repository nobody read is not a scientific claim.
+
+Three consequences for anyone editing this repository:
+
+* **Never write a novelty claim.** Not in the README, not in a docstring, not in a commit
+  message. The contribution is the *measurement* — the coverage study, the cross-check against
+  `original/`, the IPOPT completeness test — and that is what the documents should claim.
+* **Keep `docs/provenance.md` accurate.** Its numbers come from
+  `python3 scripts/study_wrist_offset_ik.py`; if a change moves one of them, the document moves
+  with it, and the change needs to say why.
+* **Do not describe the 2023 published rewrite as the original derivation.** The 2021 prototype
+  parameterised the elbow root and pinned it at the call sites
+  (`git show 295c6e0:INVERSE_FRANKA.py`, line 97, `solution_theta_4(kesai, -1)` with
+  `#/此处有分支` beside it and the alternative commented out on the next line). The 2023 rewrite
+  picks the `+` root by writing `(a1 + sqrt(...)) / (2*a2)`. Those are not the same choice, and
+  `docs/provenance.md` §1 is careful about exactly how much the commit history does and does not
+  establish.
 
 ## Environment
 
 | requirement | why |
 |---|---|
-| Python ≥ 3.9 | `pyproject.toml`'s `requires-python`; the code keeps `typing.Optional`/`List` for this reason |
+| Python ≥ 3.10 | `pyproject.toml`'s `requires-python`, forced by the `viz` extra: `roboticstoolbox-python>=1.4` needs 3.10. The code keeps `typing.Optional`/`List` rather than `X | None`, matching the sibling repositories |
 | NumPy ≥ 1.21 | the whole library |
 | matplotlib ≥ 3.5 | `franka_ik.viz`, the examples and the demo pages only |
 | CasADi ≥ 3.6 | **only** to import `original/` and the tests that cross-check against it; tests skip cleanly without it |
+| roboticstoolbox, swift-sim, spatialmath, spatialgeometry | the `viz` extra: `examples/07`-`11` and `tests/test_swift_viz.py`. Both skip cleanly without it |
 | Node.js | optional, for `scripts/check_demo.js` |
 
 The environment is managed with [uv](https://docs.astral.sh/uv/):
@@ -37,6 +64,7 @@ uv sync                    # .venv + uv.lock, dev group included (pytest, casadi
 uv run pytest -q           # run anything inside it without activating
 uv sync --no-dev           # library only, no pytest/casadi/ruff
 uv sync --extra reference  # + CasADi, if you only want the cross-check tests
+uv sync --extra viz        # + the 3D viewers (roboticstoolbox, swift-sim, ...)
 ```
 
 `uv.lock` is committed, so `uv sync` reproduces the exact versions the suite was
@@ -47,9 +75,11 @@ pip install -e .                    # numpy + matplotlib
 pip install -r requirements.txt     # adds casadi and pytest
 ```
 
-`import franka_ik` must never pull in CasADi or matplotlib. `franka_ik/model.py`, `geometry.py`,
-`solver.py` and `analysis.py` are pure NumPy; the presentation layer is `report.py` and
-`viz.py`, and they are not re-exported from `__init__.py`.
+`import franka_ik` must never pull in CasADi. `franka_ik/model.py`, `geometry.py`, `solver.py`,
+`analysis.py` and `numerical.py` are pure NumPy; the presentation layers -- `report.py`,
+`viz.py`, `swift_viz.py`, `swift_app.py` -- are not re-exported from `__init__.py`, and only the
+last two need the `viz` extra, which they import inside their functions rather than at module
+level.
 
 ## Running things
 
@@ -64,27 +94,90 @@ MPLBACKEND=Agg uv run python examples/01_forward_kinematics.py --save-dir /tmp/f
 MPLBACKEND=Agg uv run python examples/02_srs_reduction.py --save-dir /tmp/srs
 MPLBACKEND=Agg uv run python examples/03_branches.py --save-dir /tmp/branches
 
+uv run --extra viz python examples/07_swift_branches.py --headless --steps 1
+uv run --extra viz python examples/10_swift_singularities.py --headless --steps 1
+uv run --extra viz python examples/07_swift_branches.py --headless --model collision --steps 1
+uv run --extra viz python examples/07_swift_branches.py --headless --model mesh --steps 1
+
 uv run python -c "from franka_ik.report import build_demo_site; build_demo_site('demos')"
 for f in demos/*.html; do node scripts/check_demo.js "$f" || exit 1; done
 
-uv run ruff check .                                # line-length 100, target py39
+uv run ruff check .                                # line-length 100, target py310
+
+# the browser side, which has no other witness (needs Playwright, ad hoc)
+pip install playwright && playwright install chromium
+python3 scripts/browser_drive.py 10 --model skeleton
+python3 scripts/browser_drive.py 08 --model skeleton --markers 150   # marker upload dominates
 ```
 
-Without CasADi installed the suite reports 66 passed and 17 skipped rather than failing: the
-cross-check tests skip, and everything else runs. CasADi is only ever needed to import the
-published modules in `original/`.
+Without CasADi installed the suite reports 107 passed and 18 skipped rather than failing, and
+without the `viz` extra it reports 107 passed and 1 skipped -- that single entry is the whole
+`tests/test_swift_viz.py` module, which a module-level `importorskip` skips as a unit rather than
+23 times. The cross-check tests and the Swift tests skip, and everything else runs. CasADi is only ever needed to import the published modules
+in `original/`; the visualisation stack is only ever needed by `franka_ik.swift_viz` and the
+viewers.
+
+`franka_ik/model.py`, `geometry.py`, `solver.py`, `analysis.py` and `numerical.py` stay free of
+both. `swift_viz.py` and `swift_app.py` import `roboticstoolbox`/`swift`/`spatialgeometry` inside
+their functions, never at module level, and are not re-exported from `__init__.py`.
+
+### The four rules about the Swift scene
+
+All four are API traps that produce a scene which *looks* like a geometry bug, and all four cost
+real time here. `docs/browser_debugging.md` is the full playbook, taken from the sibling S-R-S
+study and extended with what was hit here.
+
+* **`env.add_shape(shape)`, one shape at a time, via `swift_viz.add_shapes`.** ``Swift.add``
+  dispatches on *one* shape, robot or UI element and **returns ``None`` for anything else -- a
+  list included -- without raising**. Handing it ``skeleton.shapes`` produces an empty window
+  and no error: every viewer opened blank until this was found.
+* **`env.step(dt)` renders; `time.sleep` does not.** A loop that only sleeps leaves the first
+  frame on screen, which reads as "the viewer is broken". `swift_app.hold` is the shared loop,
+  and `swift_app.interaction_loop` is that plus a slider.
+* **`--model mesh` needs `y_up=True`.** The Franka DAE files are Z-up and three.js's
+  ColladaLoader re-orients them, so Swift has to undo it; without the flag the whole robot is
+  drawn tipped 90 degrees about X, and a tipped robot is still a robot, so nothing else catches
+  it.
+* **A slider is driven by `slider.value`, never by its callback, and its value has to be written
+  back after the element is added.** Swift's slider JavaScript assigns ``value`` before
+  ``min``/``max`` while its markup starts at ``0..100``, so a range that does not contain 0 has
+  its initial value clamped to the nearer end -- measured, a joint-7 slider built with ``-58.78``
+  over ``[-77.92, -50.42]`` arrived as ``-50.42`` -- and the element is reported once, on attach,
+  as changed. Build sliders with `swift_app.add_slider`, which writes the value back once the
+  browser has the real range; `swift_app.interaction_loop` reads the live value; and
+  `tests/test_swift_app.py` pins both halves without a browser. Its ``tolerance`` must be below
+  the slider's own ``step``, or a feature as small as `examples/10`'s ``1e-4`` degree failure
+  window never triggers a redraw.
+
+One cost and one helper: **`add_shape` blocks until the browser confirms the shape is mounted**,
+so a group added that way is one round trip per shape -- measured, 150 markers took 87 s to appear,
+and a branch fan rebuilt per slider step never appeared at all. **`swift_viz.add_cloud(env,
+shapes)`** is the fix: it adds a group as a single assembly, one message and one wait, and
+`env.remove(handle)` takes it off screen in one call. The group can still be moved (its assembly
+re-reads each part's pose every frame), but a part's *colour* has to be set before it goes in.
+Its `fk` must return `SE3` rather than the 4x4 array `Shape.T` gives back -- an array survives
+every Python-side check and then fails in Swift's serialiser on the first frame.
+`docs/browser_debugging.md` §2.5 has the measurements.
 
 The root `conftest.py` puts the repository root and `original/` on `sys.path`, which is what
 lets the tests import the published modules by their bare names (`import ik_ca`). `tests/conftest.py`
 holds the shared fixtures: a seeded `rng`, the in-limit configuration sample, the published
 model and entry points, and the session-scoped `coverage_report`.
 
-| test module | what it pins |
-|---|---|
-| `tests/test_model.py` | the modified-DH table, the limits, `fk_flange`/`fk_tool`/`jacobian` against the published CasADi model and against finite differences |
-| `tests/test_geometry.py` | `STEP1` and `STEP2`: the wrist correction, the elbow quadratic, the reachable shell, the `bias = 0` collapse |
-| `tests/test_solver.py` | the eight branches, the round trip, `wrap_to_limits`, `solve_closest` continuity |
-| `tests/test_branches.py` | **the scientific claim**: the library reproduces every published branch, the published subset is the `+` elbow root, it is incomplete, and the published code's defects |
+| test module | tests | what it pins |
+|---|---|---|
+| `tests/test_model.py` | 14 | the modified-DH table, the limits, `fk_flange`/`fk_tool`/`jacobian` against the published CasADi model and against finite differences |
+| `tests/test_geometry.py` | 20 | `STEP1` and `STEP2`: the wrist correction, the elbow quadratic, the reachable shell, the `bias = 0` collapse |
+| `tests/test_solver.py` | 20 | the eight branches, the round trip, `wrap_to_limits`, `solve_closest` continuity |
+| `tests/test_branches.py` | 14 | **the scientific claim**: the library reproduces every published branch, the published subset is the `+` elbow root, it is incomplete, and the published code's defects |
+| `tests/test_analysis.py` | 13 | the coverage and solution-count studies, `reachable_distance_range`, `classify_failure` |
+| `tests/test_numerical.py` | 6 | the CasADi model, the IPOPT cross-check, and that `import franka_ik` stays CasADi-free |
+| `tests/test_swift_viz.py` | 23 | the Swift layer: the skeleton sits on the model's own joint origins, the URDF check **rejects another arm**, and the sample poses behave as documented. Skips without the `viz` extra |
+| `tests/test_swift_app.py` | 17 | the examples' shared plumbing without Swift at all: the interaction loop follows the live slider value, a play hook's write-back sticks, the tolerance can find a `1e-4` degree window, and Swift's empty first radio event is not a choice |
+
+130 tests in total, and 107 of them pass without the `viz` extra. The per-module counts are a
+reader's map to the suite rather than a contract, so a new test belongs in the module that matches
+its claim and does not need this table edited in the same commit.
 
 ### The one rule about `tests/test_branches.py`
 
@@ -110,7 +203,8 @@ measurement, put it in `docs/branch_analysis.md`, and say so in the pull request
   that names the same object as the source document is easier to check than a translation.
   Chinese is not a substitute for an English docstring.
 * **Type hints on every public function**, with `from __future__ import annotations`. Return
-  types are written as strings (`-> "np.ndarray"`) so the module still imports on 3.9.
+  types are written as strings (`-> "np.ndarray"`), which is the house style rather than a
+  version requirement now that the floor is 3.10.
 * **No wildcard imports.** Import names explicitly and list the module's public surface in
   `__all__`. The package re-exports a curated set from `franka_ik/__init__.py`; keep that list
   and `__all__` in sync, and add anything new to `docs/api.md` in the same change.

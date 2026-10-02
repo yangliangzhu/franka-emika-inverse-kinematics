@@ -144,6 +144,134 @@ distinct in-limit solutions for 300 random poses (mean 3.15):
 
 ---
 
+## `franka_ik.numerical` — the independent optimiser, and the completeness check
+
+Nothing here is needed to *use* the solver. It exists so that "these eight branches are all of
+them" can be tested against something that does not share the derivation's assumptions. CasADi is
+imported inside the functions, never at module import, so `import franka_ik` stays CasADi-free.
+
+| symbol | signature | what it does | example |
+|---|---|---|---|
+| `DEFAULT_SOLUTION_TOLERANCE` | `= 1e-8` | largest entry of `fk_flange(q) - pose` at which an IPOPT result counts as reaching the pose | `fk.DEFAULT_SOLUTION_TOLERANCE` → `1e-08` |
+| `symbolic_forward_kinematics()` | `-> casadi.Function` | the modified-DH model rebuilt in CasADi, for the optimiser | `f(q)` reproduces `fk_flange(q)` to `1e-12` |
+| `numeric_solver()` | `-> casadi.Function` | the NLP and its IPOPT solver, built once and cached | `numeric_solver()` |
+| `numerical_ik(pose, q7, starts=400, seed=0, tolerance=DEFAULT_SOLUTION_TOLERANCE)` | `-> List[np.ndarray]` | configurations reaching `pose` with joint 7 fixed, found from `starts` random in-limit starting points | `len(fk.numerical_ik(pose, q7))` → `1` for a typical pose |
+| `configuration_distance(a, b)` | `-> float` | largest whole-turn-free `|Δq|`, in radians, over the seven joints | `round(fk.numerical.configuration_distance(q, q), 12)` → `0.0` |
+| `CompletenessReport` | dataclass `(q7, numerical, analytical, matched, unmatched, unreachable, distances_deg)` | the two solution sets and how they line up | — |
+| `completeness_check(pose, q7, starts=400, seed=0, tolerance=1e-3, counter_example_tolerance=0.05)` | `-> CompletenessReport` | the completeness test: `unmatched` holds the IPOPT solutions further than `counter_example_tolerance` from **every** branch | `rep.unmatched` → `[]` over 20 poses |
+
+`configuration_distance` is in the module's `__all__` but is not re-exported at package level;
+reach it as `fk.numerical.configuration_distance`.
+
+The two tolerances are not redundant. IPOPT drives the *pose* error to zero, and near a kinematic
+singularity a joint can move a long way without moving the tool, so the optimiser stops a fraction
+of a degree from the configuration it is standing on. `tolerance` is how close a numerical
+solution has to be to count as *being* a branch; `distances_deg` keeps the full list so the margin
+is visible rather than hidden; `counter_example_tolerance` is where a result stops being
+"converged imprecisely" and becomes an unexplained configuration. Measured over 10 poses × 400
+starts: 41 solutions, 0 counter-examples, worst distance 0.0855 deg on one near-singular pose
+where that offset moves the pose by 7.8 × 10⁻⁹. See `docs/provenance.md` §4.
+
+---
+
+## `franka_ik.swift_viz` and `franka_ik.swift_app` — the 3D viewers
+
+Not re-exported at package level and not needed to use the solver: these are what
+`examples/07`-`11` are built from, and they need the optional ``viz`` extra
+(``uv sync --extra viz``). Every function imports `roboticstoolbox`, `swift` and
+`spatialgeometry` inside itself, never at module level, so `import franka_ik` stays free
+of the visualisation stack.
+
+| symbol | signature | what it does | example |
+|---|---|---|---|
+| `require_viz()` | `-> VizDependencies` | the three modules as a named tuple `(rtb, swift, sg)` | `sv.require_viz().sg` |
+| `find_franka_description()` | `-> Optional[Path]` | searches `FRANKA_IK_FRANKA_DESCRIPTION` and the usual checkout locations | — |
+| `find_urdf()` | `-> Optional[Path]` | `FRANKA_IK_URDF`, else a `.urdf` inside a `franka_description` checkout, else `None` | — |
+| `load_arm(urdf=None, check=True)` | `-> Tuple[object, Optional[Path]]` | loads the bundled Panda description, or a URDF, and verifies it | `arm, path = sv.load_arm()` |
+| `check_kinematics(arm, samples=5)` | `-> float` | largest disagreement with `fk_tool` over the 4x4; **raises** `ArmKinematicsError` above `1e-3` | `sv.check_kinematics(arm)` → `1.7e-16` |
+| `ArmKinematicsError` | `RuntimeError` | raised when the model is not this arm | — |
+| `arm_keypoints(q)` | `-> List[np.ndarray]` | nine points: base, the seven joint origins, the tool | `len(sv.arm_keypoints(q))` → `9` |
+| `joint_axes(q)` | `-> List[Tuple[np.ndarray, np.ndarray]]` | `(origin, unit axis)` per joint, from the DH frames | `sv.joint_axes(q)[3]` |
+| `ArmSkeleton(radius_scale=1.0, alpha=1.0, colour=None, show_joint_axes=False, name=None)` | class | eight capsule segments and nine spheres; `.shapes` to add, `.update(q)` to move | `sv.ArmSkeleton(alpha=0.22, colour=[0.2, 0.45, 0.85])` |
+| `link_collision_shapes(arm)` | `-> List[object]` | the loaded model's own collision primitives -- 30 cylinders and spheres from the bundled Panda description, so a realistic arm with **no URDF and no meshes** | `len(sv.link_collision_shapes(arm))` → `30` |
+| `update_link_collision_shapes(shapes, arm, q)` | `-> None` | places them at `link_pose @ shape_pose` using ``arm.fkine_all`` | — |
+| `arm_plane_outline(q, radius=0.004)` | `-> Optional[object]` | closed outline through shoulder, elbow, wrist | `sv.arm_plane_outline(q)` |
+| `manipulability_ellipsoid(q, scale=0.06, centre=None)` | `-> object` | the ellipsoid, built once at a fixed size | — |
+| `update_manipulability_ellipsoid(ellipsoid, q, centre=None)` | `-> float` | moves it and returns `model.manipulability(q)` | — |
+| `tool_axes(q, length=0.12)` | `-> object` | the tool frame | — |
+| `reachable_shell_markers(count=300, seed=0, radius=0.004, inner=False)` | `-> List[object]` | markers exactly on the closed-form shell | `len(sv.reachable_shell_markers())` → `300` |
+| `add_shapes(env, shapes)` | `-> int` | adds shapes one at a time, because `Swift.add` silently ignores a list; each one blocks until the browser mounts it | `sv.add_shapes(env, skeleton.shapes)` → `17` |
+| `add_cloud(env, shapes, name=None)` | `-> AssemblyHandle` | adds a **group** as one assembly: one message instead of one per shape, and `env.remove(handle)` takes it off again. The group can still be moved; a colour must be set before it goes in | a 150-marker cloud: 87 s one at a time, under a second as a group |
+| `camera_presets()` / `apply_camera(env, name)` | `-> Dict` / `-> None` | four presets, and applying one | `sorted(sv.camera_presets())` → `['front', 'iso', 'side', 'top']` |
+| `launch_env(headless=False, browser=None, realtime=True)` | `-> object` | launches Swift, with the install/browser hint attached to any failure | — |
+| `detect_browser()` / `is_wsl()` | `-> Optional[str]` / `-> bool` | browser discovery, for WSL | — |
+
+```python
+from franka_ik import swift_viz as sv
+
+arm, urdf = sv.load_arm()          # bundled Panda description; no download
+env = sv.launch_env(headless=True)
+skeleton = sv.ArmSkeleton()
+sv.add_shapes(env, skeleton.shapes)  # one shape at a time: Swift.add swallows a list
+skeleton.update(q)                 # pose writes only: lengths and radii are fixed
+env.close()
+```
+
+```python
+from franka_ik import swift_app
+
+q, q7 = swift_app.resolve_pose(args)      # --pose / --q7, in radians
+env, skeleton = swift_app.scene(args)     # a launched env with one skeleton in it
+```
+
+| `franka_ik.swift_app` symbol | signature | what it does |
+|---|---|---|
+| `ArmShapes` | class | one arm, either a skeleton or the collision geometry, with `.shapes` and `.update(q)` either way |
+| `build_arm_shapes(args, arm=None, *, alpha=None)` | `-> ArmShapes` | builds the arm that ``--model skeleton|collision`` asks for; ``alpha`` overrides ``--mesh-alpha``, for a faded reference arm |
+| `scene(args, arm=None)` | `-> Tuple[object, ArmShapes]` | launches Swift with one arm already in it |
+| `POSES` | `Dict[str, List[float]]` | the four sample configurations, in degrees |
+| `CAMERA_CHOICES` | `Tuple[str, ...]` | the camera presets the examples put on a radio, in listed order |
+| `resolve_pose(args)` | `-> Tuple[np.ndarray, float]` | ``(q, q7)`` in radians from ``--pose`` / ``--q7`` |
+| `joint7_window(pose, fallback=0.0, samples=361)` | `-> Tuple[float, float]` | the joint-7 interval, in degrees, that still reaches ``pose`` inside the limits -- found by asking the solver, because it is usually much narrower than the joint's own range |
+| `common_parser(description)` | `-> ArgumentParser` | the shared flags, ``--model`` included |
+| `add_readout(env, lines, name="readout", elements=None)` | `-> Label` | adds a text readout and returns it; `set_readout(label, lines)` replaces its lines |
+| `add_slider(env, low=, high=, value=, label=, step=, unit=, precision=, name=, elements=)` | `-> Slider` | a slider whose **callback does nothing**: `interaction_loop` reads `slider.value`, which is the live value |
+| `read_slider(slider, fallback)` | `-> float` | the slider's live value, or `fallback` before the browser has sent one |
+| `add_radio(env, label=, options=, on_select=, checked=, name=, elements=)` | `-> Radio` | a radio group calling ``on_select(index)``; Swift's own empty first event is ignored |
+| `add_button(env, label, on_click, elements=None)` | `-> Button` | a button; Swift fires the callback once as the page attaches |
+| `add_camera_radio(env, initial="iso", elements=None)` | `-> Radio` | the camera-preset radio, with `initial` selected |
+| `interaction_loop(env, slider=None, initial=None, on_change=None, on_frame=None, steps=None, dt=0.05, tolerance=1e-9)` | `-> None` | `hold` plus a slider: renders every frame, calls `on_change(value)` when the live value moves, and calls `on_frame(value)` every frame -- a returned value is written back to the slider, which is how a play button sweeps |
+
+The interaction helpers exist because Swift's UI is not a plain event source, and the slider is
+the sharp end of that. **Swift's slider JavaScript assigns `value` before `min`/`max`**
+(`swift/public/js/ui.js`, `Slider.update`) while its markup starts the input at `0..100`, so a
+range that does not contain 0 has its initial value clamped to the nearer end and reported once,
+on attach, as a change -- measured, a joint-7 slider built with `value=-58.78` over
+`[-77.92, -50.42]` came back as `-50.42`, its maximum. Reading `.value` instead of the callback
+argument is half the answer; `add_slider` and `interaction_loop` write the intended value back
+once the element is in the scene, which sticks because by then the browser has the real range.
+A value written from Python **is** visible to the next read, in both directions measured:
+`42.0` reads back as `42`, and a drag to `-70` arrives as `-70`.
+`examples/10_swift_singularities.py` fixes the other end of the design: its slider has
+`step=1e-5` and brackets a failure window `1e-4` degrees wide, so `interaction_loop`'s `tolerance`
+has to be below the step or the feature is invisible. `tests/test_swift_app.py` pins all of it
+without a browser.
+
+```python
+arm, urdf = sv.load_arm()
+shapes = sv.link_collision_shapes(arm)          # 30 primitives, no URDF involved
+sv.add_shapes(env, shapes)
+sv.update_link_collision_shapes(shapes, arm, q)
+```
+
+Three behaviours are deliberate and easy to mistake for bugs. `update` writes **poses only** --
+a length or radius written after construction marks the shape changed, and Swift's headless
+client does not acknowledge that update -- so anything whose size must change is rebuilt through
+the public `add`/`remove` API. `arm_keypoints` draws the **tool** frame, not the flange: the
+flange lies 0.107 m along joint 7's axis, inside the tool stem. And `check_kinematics` **raises**
+rather than warns when a URDF turns out to be a different arm, because the alternative is a
+plausible picture of the wrong robot.
+
 ## `franka_ik.report` and `franka_ik.viz` — figures and demo pages
 
 The presentation layer. Neither module is re-exported at package level: import them by name,
@@ -198,8 +326,10 @@ folded into that choice so the correspondence holds over the whole joint-7 range
 `franka_ik.geometry` also defines `rot_x`, `rot_y`, `rot_z`, `equivalent_joint_rotation`,
 `link_offset` and `DEFAULT_ALPHAS`; `franka_ik.model` defines `link_transform`, `trans_x`,
 `trans_z`, `joint_frames`, `limits`, `FLANGE_ROW` and `TOOL_ROTATION`; `franka_ik.analysis`
-defines `BranchOutcome` and `PUBLISHED_Q4_ROOT`; and `franka_ik.report` / `franka_ik.viz` above
-are whole modules outside the re-export list. These are part of the implementation (and
+defines `BranchOutcome` and `PUBLISHED_Q4_ROOT`; and `franka_ik.report`, `franka_ik.viz`,
+`franka_ik.swift_viz` and `franka_ik.swift_app` are whole modules outside the re-export list --
+`franka_ik.swift_app` in particular is imported by the examples for its `POSES` table and its
+argument parsing, not by the library. These are part of the implementation (and
 `PUBLISHED_Q4_ROOT` is the constant that pins the published four-branch subset), but they are
 not re-exported at package level. Import them from their module if you need them:
 `from franka_ik.geometry import equivalent_joint_rotation`.

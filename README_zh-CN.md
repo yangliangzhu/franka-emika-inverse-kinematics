@@ -73,10 +73,10 @@ tan_half_q4 = (a1 + ca.sqrt(a1**2 - 4*a0*a2)) / (2*a2)     # original/ik_ca.py
 环境用 [uv](https://docs.astral.sh/uv/) 管理：
 
 ```bash
-git clone git@gitee.com:yangliangzhu_rob/franka-emika-inverse-kinematics.git
+git clone git@github.com:yangliangzhu/franka-emika-inverse-kinematics.git
 cd franka-emika-inverse-kinematics
 uv sync                 # 建 .venv 并装好 dev 组（pytest / casadi / ruff）
-uv run pytest -q        # 83 个测试
+uv run pytest -q        # 90 个测试
 uv run ruff check .
 ```
 
@@ -88,9 +88,9 @@ pip install -e .                    # numpy + matplotlib，求解器是纯 NumPy
 pip install -r requirements.txt     # 额外装上 CasADi，只有跑 original/ 时才需要
 ```
 
-要求 Python ≥ 3.9。`franka_ik` 本身只依赖 NumPy；matplotlib 用于画图。**CasADi 是可选的** ——
+要求 Python ≥ 3.10（`viz` 依赖 `roboticstoolbox`，它要求 3.10；库本身仍然只需要 NumPy）。`franka_ik` 本身只依赖 NumPy；matplotlib 用于画图。**CasADi 是可选的** ——
 求解器不用它（纯 NumPy，8 个分支约 1 ms），但 `original/` 里的原实现用，所以逐支对照的测试需要
-它。没装 CasADi 时那部分测试会跳过（66 passed, 17 skipped）而不是失败。
+它。没装 CasADi 时那部分测试会跳过（67 passed, 18 skipped）而不是失败。
 
 ## 使用
 
@@ -141,24 +141,75 @@ fk.solve_closest(pose, q7, reference=previous)   # 离参考构型最近的一�
 |---|---|
 | [docs/method.md](docs/method.md) | 推导全过程，按 `STEP1`–`STEP4` 逐式展开，并标注 S-R-S 论文的公式号 |
 | [docs/branch_analysis.md](docs/branch_analysis.md) | 四个分支还是八个：测量方法，以及为什么最直观的检验看不出问题 |
-| [docs/limitations.md](docs/limitations.md) | 关节限位、`q₇ = ±90°`、并不存在的对称性、原代码的缺陷 |
+| [docs/browser_debugging.md](docs/browser_debugging.md) | 窗口空白、动画不动：踩过的 Swift API 坑，以及怎么用 Playwright 直接看页面 |\n| [docs/limitations.md](docs/limitations.md) | 关节限位、`q₇ = ±90°`、并不存在的对称性、原代码的缺陷 |
+| [docs/provenance.md](docs/provenance.md) | 来龙去脉的实测版：时间线、最接近的已发表工作、以及它对同一个第二根的取舍 |
 | [docs/api.md](docs/api.md) | 全部导出符号，含签名与示例 |
 | [docs/original_notes_zh.md](docs/original_notes_zh.md) | 作者 2020 年写下的原始说明 |
 | [AGENTS.md](AGENTS.md) | 参与开发指南：环境、测试、代码风格 |
 
+## 让它动起来
+
+上面有几条结论，看着机械臂动一遍比读数字容易信：八个分支、可达外壳、关节 2 过零。
+`examples/07`–`11` 是基于 Swift 的交互式 3D 演示，由 `solve` 用的同一套闭式解驱动：
+
+```bash
+uv sync --extra viz
+python3 examples/07_swift_branches.py --pose second_root   # 同一个位姿的全部解，按肘根着色
+python3 examples/08_swift_workspace.py                      # 可达外壳，配合 --scan
+python3 examples/10_swift_singularities.py                  # q2 = 0：没有既精确又在限位内的解
+python3 examples/11_swift_tracking.py                       # 用 solve_closest 跟踪一条直线
+```
+
+Swift 窗口是**可交互的**：`07` 有扫掠关节 7 的滑块和播放按钮，`08` 控制标记数量，`10` 用关节 2 偏移滑块夹住奇异点，`11` 有跟踪播放按钮，每个都带一行实时读数。`demos/branches.html` 不用 Swift 也能动：关节 7 滑块 + 播放按钮，扫掠数据由 `franka_ik.report` 预先算好内嵌，颜色**蓝色＝公布代码保留的那个肘根，橙色＝它丢掉的那个**——拖到生成构型就能看见它落在橙色一侧。
+
+需要浏览器（或者用 `--headless`：照样跑完并打印全部数字，**但不画**——只看到文字是这个参数造成的，
+不是缺 URDF）。
+
+`--model` 决定画成什么样，三种都能离线跑：
+
+* **`--model mesh`（默认）** 画 Panda **自己的视觉网格**，也就是真机。描述文件内置在
+  `third_party/`（Apache-2.0，约 11 MB，8 个 link），首次使用时从 xacro 展开；网格位置由
+  `franka_ik.model.forward_kinematics` 给出，所以同样不可能和求解器脱节；
+* `--model collision` 画 `rtb-data` 自带描述里的碰撞体：30 个圆柱和球，除已安装的包之外不需要
+  任何文件；
+* `--model skeleton` 是火柴人，也是唯一能按肘根分别上色的模式——07 和 09 靠它区分两个分支半区。
+
+```bash
+uv run --extra viz python examples/07_swift_branches.py --pose second_root --browser auto
+uv run --extra viz python examples/07_swift_branches.py --pose second_root --model collision
+```
+
+`FRANKA_IK_URDF` 可以换成你自己的 URDF，但会**先和 `fk_tool` 校验再画**——`franka_description`
+里同时有 Panda 和 FR3，两者腕部差 57 mm，拿 Panda 的关节角去驱动 FR3 会画出一个看着合理、
+其实错误的机械臂。出处见 [third_party/README.md](third_party/README.md)；五个例子都在
+[examples/README.md](examples/README.md)。
+
 ## 来龙去脉
 
-这是一套自行推导的方法，写于 2020 年底作者刚接触 Franka 机械臂的时候，当时并没有在网上找到
-Panda 的解析反解。它的思路是在一篇 KUKA（S-R-S 构型）反解论文的基础上做化归，并不是最优方法；
-这几年也出现了很多更好的方法，本仓库仅供参考。2020 年的代码原封不动地保存在 `original/` 里，
-`docs/original_notes_zh.md` 是作者当年的说明，推导本身则是仓库根目录那份手写 PDF。
+这是一套自行推导的方法，**2021 年 2 月**首次推到 GitHub，当时作者刚接触 Franka 机械臂，
+在网上找不到 Panda 的解析反解。思路是把腕部偏置旋转进一段加长的连杆，把机械臂化归为
+一族**等效** S-R-S 构型，再用 KUKA（S-R-S）闭式解求解，冗余量取关节 7。
 
-使用的话，请引用闭式解的出处：
+但它**并不新颖**，仓库不该装作新颖：He 与 Liu 在 ICRA 2022 发表了同样的化归、同样的冗余
+参数、同样的八个分支（[IEEE Xplore 9646185](https://ieeexplore.ieee.org/abstract/document/9646185)）。
+他们的预印本比这里的首次提交晚约八个月，但"没人看的仓库"不算科学优先权。本仓库相对已发表
+工作真正多做的一件事，是**测量自己的完备性**——与原代码逐分支比对、用独立的 IPOPT 枚举
+反向验证、统计分支数——并把自己的错误记下来。时间线、并排数据和"哪些部分真值钱"的排序
+都在 [docs/provenance.md](docs/provenance.md)。
+
+2020/2023 年的代码原封不动保存在 `original/` 里，`docs/original_notes_zh.md` 是作者当年的
+说明，推导本身则是仓库根目录那份手写 PDF。
+
+使用的话，请引用方法所依赖的已发表出处：
 
 > M. Shimizu, H. Kakuya, W.-K. Yoon, K. Kitagaki, K. Kosuge, "Analytical Inverse Kinematic
 > Computation for 7-DOF Redundant Manipulators With Joint Limits and Its Application to
 > Redundancy Resolution", *IEEE Transactions on Robotics*, 24(5):1131–1142, 2008.
 > [doi:10.1109/TRO.2008.2003266](https://doi.org/10.1109/TRO.2008.2003266)
+
+> Y. He, S. Liu, "Analytical Inverse Kinematics for Franka Emika Panda — a Geometrical Solver for
+> 7-DOF Manipulators with Unconventional Design", *IEEE International Conference on Robotics and
+> Automation (ICRA)*, 2022.
 
 ## 许可证
 

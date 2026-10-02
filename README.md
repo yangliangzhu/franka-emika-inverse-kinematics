@@ -85,10 +85,10 @@ creates the virtual environment, installs the library in editable mode and
 brings in the development tools:
 
 ```bash
-git clone git@gitee.com:yangliangzhu_rob/franka-emika-inverse-kinematics.git
+git clone git@github.com:yangliangzhu/franka-emika-inverse-kinematics.git
 cd franka-emika-inverse-kinematics
 uv sync                 # .venv + uv.lock, dev group included
-uv run pytest -q        # 83 tests
+uv run pytest -q        # 90 tests
 uv run ruff check .
 ```
 
@@ -107,7 +107,7 @@ uv sync --extra reference        # + CasADi, for the cross-check against origina
 CasADi is not used by `franka_ik` -- the solver is pure NumPy and runs all eight
 branches in about a millisecond -- but it is what `original/` uses, so
 `tests/test_branches.py` needs it to compare the library against the published
-implementation. Without it the suite skips those tests (66 passed, 17 skipped)
+implementation. Without it the suite skips those tests (67 passed, 18 skipped)
 rather than failing.
 
 ## Using it
@@ -142,6 +142,52 @@ before putting it in a controller:
 
 `docs/limitations.md` has the measurements behind all three.
 
+## Seeing it move
+
+Three of the findings above are easier to believe when the arm is on screen: the eight branches, the
+reachable shell, and joint 2 at zero. `examples/07`-`11` are interactive Swift viewers for them,
+driven by the same closed form that `solve` uses:
+
+```bash
+uv sync --extra viz
+python3 examples/07_swift_branches.py --pose second_root   # all solutions for one pose, by elbow root
+python3 examples/08_swift_workspace.py                      # the reachable shell, with --scan
+python3 examples/10_swift_singularities.py                  # q2 = 0, where nothing is both exact and in range
+python3 examples/11_swift_tracking.py                       # a straight line followed with solve_closest
+```
+
+The Swift windows are **interactive**: `07` has a joint-7 slider that sweeps the redundancy and
+a play button that animates it, `08` a marker control, `10` a joint-2 delta slider bracketing the
+singularity, `11` a play button for the tracking run, and every one of them a readout that says
+what is currently on screen. `demos/branches.html` does the same thing without Swift: a joint-7
+slider and play button over a sweep that `franka_ik.report` pre-computes and embeds, with the
+arms coloured **blue for the elbow root the published code keeps and orange for the one it
+drops**, so scrubbing to the generating configuration shows it sitting on the orange side.
+
+They need a browser (or `--headless`, which runs to completion and prints every number, and draws
+nothing — if you see only text, that is the flag, not a missing URDF).
+
+`--model` chooses what the arm looks like, and all three work offline:
+
+* **`--model mesh` (default)** draws the Panda's **own visual meshes** — the real robot. The
+  description is vendored under `third_party/` (Apache-2.0, ~11 MB, 8 links) and expanded from
+  xacro on first use; the meshes are placed by `franka_ik.model.forward_kinematics`, so they
+  cannot drift from the solver either;
+* `--model collision` draws the bundled `rtb-data` description's collision geometry: 30 cylinders
+  and spheres, a decent likeness that needs no files beyond the installed package;
+* `--model skeleton` is a stick figure, and the only mode that can be recoloured per elbow root —
+  which is how examples 07 and 09 tell the two halves of the branch set apart.
+
+```bash
+uv run --extra viz python examples/07_swift_branches.py --pose second_root --browser auto
+uv run --extra viz python examples/07_swift_branches.py --pose second_root --model collision
+```
+
+`FRANKA_IK_URDF` overrides the description with a URDF of your own, and it is **verified against
+`fk_tool` before it is drawn** — `franka_description` ships the Panda and the FR3, whose wrists
+differ by 57 mm, and driving the wrong one with Panda joint vectors would draw a plausible, wrong
+arm. `third_party/README.md` has the provenance; `examples/README.md` lists all five viewers.
+
 ## Repository layout
 
 | path | what it is |
@@ -161,26 +207,63 @@ before putting it in a controller:
 |---|---|
 | [docs/method.md](docs/method.md) | the derivation, `STEP1`–`STEP4`, equation by equation, with the S-R-S paper's equation numbers |
 | [docs/branch_analysis.md](docs/branch_analysis.md) | four branches or eight: the measurement, and why the obvious test cannot see the difference |
-| [docs/limitations.md](docs/limitations.md) | joint limits, `q₇ = ±90°`, symmetries that do not exist, the published code's defects |
+| [docs/browser_debugging.md](docs/browser_debugging.md) | nothing on screen, nothing moving: the Swift API traps this repository walked into, and how to see the page with Playwright |\n| [docs/limitations.md](docs/limitations.md) | joint limits, `q₇ = ±90°`, symmetries that do not exist, the published code's defects |
+| [docs/provenance.md](docs/provenance.md) | what is original here and what is not: the dates, the closest published work, and what it says about the same second root |
 | [docs/api.md](docs/api.md) | every exported symbol, with signature and example |
 | [docs/original_notes_zh.md](docs/original_notes_zh.md) | the author's own notes from 2020 |
 | [AGENTS.md](AGENTS.md) | contributor guide: environment, tests, style |
 
 ## Provenance
 
-This is an original, self-derived method, written at the end of 2020 when the author first
-worked with a Franka arm and could not find a published analytical inverse kinematics for it.
-It was obtained by applying a change-of-variables idea to a closed form for KUKA-style S-R-S
-arms — it is not claimed to be the optimal method, and several better ones have appeared since.
-The 2020 code is preserved unmodified in `original/`; `docs/original_notes_zh.md` is the
+An original, self-derived method — first pushed in **February 2021**, when the author worked with
+a Franka arm and could not find a published analytical inverse kinematics for it. It reduces the
+arm to an *equivalent* S-R-S family by rotating the wrist offset into a lengthened link, and
+solves that with the closed form for KUKA-style S-R-S arms, parameterised by joint 7.
+
+It is **not novel**, and the repository should not pretend otherwise. He and Liu published the
+same reduction, with the same redundancy parameter and the same eight branches, at ICRA 2022
+([IEEE Xplore 9646185](https://ieeexplore.ieee.org/abstract/document/9646185)); their preprint
+postdates the first push here by about eight months, but a repository nobody reads is not a
+scientific claim. What this repository does that the published work does not is *measure* its own
+completeness — against the 2020/2023 files, against an independent IPOPT enumeration, and against
+the branch count — and record where the method is wrong.
+
+Three findings from that measurement are worth stating plainly, and all three are in
+[docs/provenance.md](docs/provenance.md) with their numbers:
+
+* the 2021 prototype exposed the second root of the elbow quadratic as a parameter
+  (`solution_theta_4(lamda, choice)`) and then pinned it at the single call site, leaving the
+  alternative commented out on the next line — so a root was dropped on purpose, not overlooked,
+  and the 2023 rewrite that `original/` preserves makes a different choice again;
+* the joint limits are **not** the reason, and the published `limit_joints` never checks one: it
+  wraps into hand-written windows that are wider than the limits `Panda` declares;
+* every one of the 35 configurations that sit on the discarded root has a valid in-limit solution
+  there, so the second root is a genuine engineering trade, not a dead branch.
+
+The 2020/2023 code is preserved unmodified in `original/`; `docs/original_notes_zh.md` is the
 author's own summary, and the derivation itself is the hand-written PDF at the repository root.
 
-If you use it, cite the paper the closed form comes from:
+If you use the method, cite the published derivations it stands on:
 
 > M. Shimizu, H. Kakuya, W.-K. Yoon, K. Kitagaki, K. Kosuge, "Analytical Inverse Kinematic
 > Computation for 7-DOF Redundant Manipulators With Joint Limits and Its Application to
 > Redundancy Resolution", *IEEE Transactions on Robotics*, 24(5):1131–1142, 2008.
 > [doi:10.1109/TRO.2008.2003266](https://doi.org/10.1109/TRO.2008.2003266)
+
+> Y. He, S. Liu, "Analytical Inverse Kinematics for Franka Emika Panda — a Geometrical Solver for
+> 7-DOF Manipulators with Unconventional Design", *IEEE International Conference on Robotics and
+> Automation (ICRA)*, 2022.
+
+If you use the method, cite the published derivations it stands on:
+
+> M. Shimizu, H. Kakuya, W.-K. Yoon, K. Kitagaki, K. Kosuge, "Analytical Inverse Kinematic
+> Computation for 7-DOF Redundant Manipulators With Joint Limits and Its Application to
+> Redundancy Resolution", *IEEE Transactions on Robotics*, 24(5):1131–1142, 2008.
+> [doi:10.1109/TRO.2008.2003266](https://doi.org/10.1109/TRO.2008.2003266)
+
+> Y. He, S. Liu, "Analytical Inverse Kinematics for Franka Emika Panda — a Geometrical Solver for
+> 7-DOF Manipulators with Unconventional Design", *IEEE International Conference on Robotics and
+> Automation (ICRA)*, 2022.
 
 ## License
 
