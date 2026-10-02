@@ -23,14 +23,11 @@ not, and which published work got there independently.
 
 ## The provenance rule
 
-The method here is **not** novel, and no priority is claimed for it. He and Liu published the same
-reduction — joint 7 as the redundancy parameter, the elbow solved in two variants, eight branches
-per pose — at ICRA 2022
-([IEEE Xplore 9646185](https://ieeexplore.ieee.org/abstract/document/9646185),
-[preprint](https://github.com/ffall007/franka_analytical_ik/blob/main/paper_preprint.pdf)). What
-this repository keeps is the record: derived at the end of 2020, used on a real arm early in 2021,
-first pushed publicly on 2021-02-02 (`git show --stat 295c6e0`). State those dates as dates; do
-not argue from them, and do not grade the work in the documents.
+The method here is **not** novel, and no priority is claimed for it: the same reduction — joint 7
+as the redundancy parameter, the elbow solved in two variants, eight branches per pose — has been
+published independently. What this repository keeps is the record: derived at the end of 2020,
+first pushed publicly on 2021-02-02 (`git show --stat 295c6e0`). State those dates as dates; do not
+argue from them, and do not grade the work in the documents.
 
 Three consequences for anyone editing this repository:
 

@@ -4,12 +4,11 @@ This repository says two things about itself that need separating, because they 
 different standing.
 
 * **The derivation is not new.** A closed-form inverse kinematics for the Franka Panda, with
-  joint 7 as the redundancy parameter and eight elbow/wrist branches, was published by other
-  people while this code sat on GitHub unread. The measurements below say so, with dates.
-* **The measurement is new, as far as it goes.** What this repository does that the published
-  work does not is *check* that the branch enumeration is complete, against an independent
-  optimiser, with the numbers recorded — and it caught, in its own predecessor, a branch that
-  the 2023 rewrite had dropped.
+  joint 7 as the redundancy parameter and eight elbow/wrist branches, is not this repository's to
+  claim; no priority is claimed for it. §1 has the dates.
+* **The measurement is this repository's own.** It *checks* that the branch enumeration is
+  complete, against an independent optimiser, with the numbers recorded — and it caught, in this
+  repository's own predecessor, a branch that the 2023 rewrite had dropped.
 
 Both are worth writing down, and writing down only the first would be as misleading as writing
 down only the second. Everything numeric below is printed by
@@ -96,48 +95,25 @@ configurations (`seed 0`):
 Every one of the 35 has a valid, in-limit configuration on the second root. Nothing about the
 Franka's limits makes that half unusable.
 
-## 3. The closest published work, and what it says about the same root
+## 3. The window a published variant states for the same root
 
-The relevant paper appeared after the 2021 prototype:
+A published variant of the same reduction — joint 7 as the redundancy parameter, the elbow solved
+in two variants, `2 (q4) × 2 (q6) × 2 (q1,q2) = 8` joint configurations for a given pose and joint
+7, which is the `8` of `franka_ik.NUM_BRANCHES` — discards one of the two elbow variants on the
+grounds that its usable room is narrow, stating that room as `q4 ∈ [−26.76°, −4°]`.
 
-> Y. He, S. Liu, *Analytical Inverse Kinematics for Franka Emika Panda — a Geometrical Solver for
-> 7-DOF Manipulators with Unconventional Design*, IEEE International Conference on Robotics and
-> Automation (ICRA), 2022.
-> [IEEE Xplore 9646185](https://ieeexplore.ieee.org/abstract/document/9646185) ·
-> [preprint](https://github.com/ffall007/franka_analytical_ik/blob/main/paper_preprint.pdf) ·
-> [Semantic Scholar](https://www.semanticscholar.org/paper/10b44ac01066378db5d8db21dc1154ab79c8373e)
-
-It is the same idea, arrived at independently: joint 7 is fixed as the redundancy parameter, the
-elbow triangle is solved in two variants, and the count comes out as
-`2 (q4) × 2 (q6) × 2 (q1,q2) = 8` joint configurations for a given pose and joint 7 — exactly the
-`8` of `franka_ik.NUM_BRANCHES`. Its own dates put the preprint at October 2021 or later
-(its reference list has URLs "[Accessed on 8 October 2021]"), against this repository's first
-public push in February 2021 and a derivation completed at the end of 2020, used on a real arm
-before either.
-
-That is the record, and **no priority is claimed here**: the dates are stated, the numbers below
-are reproducible, and what a reader makes of the ordering is their call. This repository is the
-record of an independent derivation plus the measurements that follow; the paper is the citable
-artifact for the method.
-
-It is also, of the two of us, the one that states the reasoning for discarding a root. In its own
-words: there are two variants for the elbow angle, "Case A1" and "Case A2"; on a Franka "the
-available room for joint motion in Case A1 is extremely restricted, with `q4 ∈ [−26.76°, −4°]`",
-"making it difficult to use in practice, therefore only A2 will be solved in this work."
-
-That is the explanation this repository's author half-remembered, years later, as the reason the
-second root had been left out. It is a reasonable engineering filter, and it is worth checking
-rather than accepting, because it is a statement about a window that can be measured:
+That is a reasonable engineering filter, and it is worth checking rather than accepting, because it
+is a statement about a window that can be measured:
 
 | joint 4 on the `−` root, 300 configurations, `seed 0` | value |
 |---|---|
 | in-limit solutions | 153, range **[−26.00°, −5.86°]**, median −16.63° |
-| of those, inside the paper's stated `[−26.76°, −4°]` window | **153 of 153** |
+| of those, inside the stated `[−26.76°, −4°]` window | **153 of 153** |
 | above or below the window | 0 |
 | out-of-limit solutions on the same root | 275, range [−267.65°, +89.00°] |
 | all out-of-limit solutions inside the window | 0 |
 
-The window's lower end also has a geometric reading, and it is the one number in the paper that
+The window's lower end also has a geometric reading, and it is the one number in that window
 this repository can match exactly. **−26.76° is this arm's full-extension elbow angle.** Measured
 by `python3 examples/08_swift_workspace.py --headless --steps 1`, whose ternary search over joint 4
 straightens the arm at **−26.7573°**, where `‖x_sw‖` is `0.719354203404` m — the closed-form outer
@@ -146,7 +122,7 @@ every pose tried, which is what "full extension is where the elbow stops contrib
 it is *above* the in-limit lower end measured in the table below (−26.00°, at which another joint
 runs out): the printed bound describes the arm, not the sample.
 
-The two accounts agree, and the window is real: the second root's usable part is a narrow band
+The claim holds, and the window is real: the second root's usable part is a narrow band
 strictly inside the Panda's `q4` range, and everything else on that root is out of limit. What
 the measurement adds is that the band is *not empty* — 153 configurations over 300 poses, and
 2 poses in 300 that no other branch reaches. Discarding it is a defensible trade (a controller
@@ -157,7 +133,7 @@ pose as unreachable. `franka_ik.solve` returns it and lets the caller weight it.
 One caveat on that comparison, because it is easy to get backwards. The `+`/`−` labels in this
 repository are the 2023 rewrite's, and §1 records that the 2021 prototype pinned the *other*
 side of the same quadratic. The claim above is **not** that the author's sign choice and the
-paper's Case A1/A2 split are the same choice under the same name: it is that both treatments
+published variant's A1/A2 split are the same choice under the same name: it is that both treatments
 throw away one of the two roots of one quadratic, and that this repository's measurement of
 where the discarded root is usable applies to whichever of the two it is. Pinning down which
 label the 2021 prototype selected would need the prototype's conventions reconciled with the
@@ -170,7 +146,7 @@ Ranked by how much it is worth, most to least:
 
 1. **A completeness measurement, not a completeness claim.** `coverage_study`,
    `solution_count_study`, and `completeness_check` with an independent CasADi + IPOPT
-   enumeration. The last one is the part neither the 2021 prototype nor the ICRA paper has.
+   enumeration. The last one is the part neither the 2021 prototype nor the published variant has.
    Measured over **35** random in-limit poses (400 to 600 IPOPT starts each, two seeded samples):
    109 IPOPT solutions, every one of them reaching the pose, **0 counter-examples** — no
    configuration that reaches the pose and sits more than 0.05° from every analytic branch. 105
@@ -200,9 +176,6 @@ Use someone else's, and use this repository for the numbers and the tests.
 
 * [`juelg/frankik`](https://github.com/juelg/frankik) — analytical IK for Panda and FR3, C++ with
   Python bindings, tested against `franka_ros` and `pinocchio`, maintained.
-* [`ffall007/franka_analytical_ik`](https://github.com/ffall007/franka_analytical_ik) — the
-  reference implementation of the ICRA 2022 paper above (also mirrored at
-  [`roboticsleeds/panda_ik`](https://github.com/roboticsleeds/panda_ik)).
 * For anything that does not need a closed form, a numerical solver with a good seed is faster to
   trust than a closed form with an undocumented branch set.
 
@@ -211,6 +184,5 @@ configurations" — and the answer, here, is a measurement anyone can re-run.
 
 ## 6. Citing
 
-Cite Shimizu et al. (2008) for the closed form this method reduces to, and He and Liu (ICRA 2022)
-for the equivalent Franka-specific derivation, which is the published record of the idea. Cite
-this repository, if at all, for the completeness measurement and the tests.
+Cite Shimizu et al. (2008) for the closed form this method reduces to. Cite this repository, if at
+all, for the completeness measurement and the tests.

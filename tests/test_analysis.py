@@ -244,18 +244,18 @@ def test_the_limits_do_not_explain_the_discarded_elbow_root() -> None:
     """The second elbow root is not discarded by the joint limits, and is not unusable.
 
     ``docs/provenance.md`` is where this matters: the published code takes one root
-    of the ``STEP2`` quadratic, and the natural first guess -- and the reason the
-    closest published work gives for dropping one of its two elbow variants -- is
-    that the other root violates the Panda's joint limits.  Measured over 300
+    of the ``STEP2`` quadratic, and the natural first guess -- and the reason a
+    published variant of the same reduction gives for dropping one of its two variants
+    -- is that the other root violates the Panda's joint limits.  Measured over 300
     in-limit configurations at ``seed 0``, it does not.  Every one of the 35
     configurations that sit on the second root has an in-limit solution there, and
     for 2 of them that root is the only way to reach the pose at all.
 
     The same sample also pins the one number in ``docs/provenance.md`` §3 that
     speaks to the published reasoning: **all 153** in-limit solutions on the second
-    root have joint 4 inside the band the ICRA 2022 paper quotes for the variant it
-    discards, ``[-26.76, -4]`` deg.  Both accounts agree about the window; they
-    disagree about whether it is empty.
+    root have joint 4 inside the band a published variant of the same reduction
+    quotes for the variant it discards, ``[-26.76, -4]`` deg.  Both accounts agree
+    about the window; they disagree about whether it is empty.
     """
     lower, upper = model.lower_limits(), model.upper_limits()
     rng = np.random.default_rng(0)

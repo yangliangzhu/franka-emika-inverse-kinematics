@@ -26,9 +26,9 @@ Four measurements, all on the same seeded sample of in-limit configurations:
 
 ``q4``
     The histogram of joint 4 on the second root, split by whether the solution is
-    inside the Panda's range.  This is the measurement that lets the repository
-    say something precise about the closest published work, which discards one
-    variant of the second root on the grounds that it is impractical on a Franka.
+    inside the Panda's range.  This is the measurement that lets the repository say
+    something precise about a published variant of the same reduction, which discards
+    one of the second root's two variants as impractical on a Franka.
 
 ``optimiser``
     Optional (``--optimiser``): an independent CasADi + IPOPT enumeration, used
@@ -77,11 +77,10 @@ LOGGER = logging.getLogger("study_wrist_offset_ik")
 #: :func:`franka_ik.solver.solve`.
 _TURN_DEG = 360.0
 
-#: Joint-4 window that the closest published work quotes for the elbow variant it
-#: discards.  Quoted, not derived here: He and Liu, *Analytical Inverse Kinematics
-#: for Franka Emika Panda -- a Geometrical Solver for 7-DOF Manipulators with
-#: Unconventional Design*, say Case A1 gives ``q4 in [-26.76, -4] deg`` and that
-#: they ignore it.  The measurement below is what that window actually contains.
+#: Joint-4 window that a published variant of the same reduction quotes for the elbow
+#: variant it discards -- ``q4 in [-26.76, -4] deg``, which it states as too narrow to
+#: use.  Quoted, not derived here; the measurement below is what that window actually
+#: contains.
 PUBLISHED_ELBOW_WINDOW_DEG = (-26.76, -4.0)
 
 
