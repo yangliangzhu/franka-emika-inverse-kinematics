@@ -16,7 +16,7 @@ Two things are unusual about it, and both shape how it should be edited:
   included, because the library is cross-checked against it and the defects are documented
   rather than erased (`docs/limitations.md`). Never reformat, "fix" or re-derive it.
 
-Read `README.md` first, then `docs/method.md`. `docs/limitations.md` is the list of things that
+Read `README.md` first (the Chinese one; `README.en.md` is the same text in English), then `docs/method.md`. `docs/limitations.md` is the list of things that
 are known to be imperfect, and is the first place to look when a change seems to break
 something. `docs/provenance.md` is what keeps the claims honest: what here is original, what is
 not, and which published work got there independently.
