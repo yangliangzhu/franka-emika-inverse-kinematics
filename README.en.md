@@ -198,7 +198,7 @@ arm. `third_party/README.md` has the provenance; `examples/README.md` lists all 
 |---|---|
 | `franka_ik/` | the library: `model` (modified-DH FK, Jacobian), `geometry` (the S-R-S reduction), `solver` (eight-branch IK), `analysis` (studies of the solution set), plus `viz` and `report` for the figures and the demo pages |
 | `original/` | the 2020 implementation, kept verbatim: `panda.py`, `ik_ca.py`, `ik_ca2.py`, `test.ipynb` |
-| `docs/` | `method.md`, `branch_analysis.md`, `limitations.md`, `api.md`, and the author's `original_notes_zh.md` |
+| `docs/` | `method.md`, `method_illustrated.html`, `branch_analysis.md`, `limitations.md`, `api.md`, and the author's `original_notes_zh.md` |
 | `franka解析反解方法.pdf` | the hand-written derivation, `STEP1`–`STEP4` |
 | `tests/` | the test suite, including the branch-by-branch cross-check against `original/` |
 | `examples/` | eleven walkthroughs: `01`-`06` are matplotlib studies (the model, the reduction, the eight branches, the joint limits, the coverage study, tracking), `07`-`11` are the interactive Swift viewers |
@@ -211,6 +211,7 @@ arm. `third_party/README.md` has the provenance; `examples/README.md` lists all 
 | document | contents |
 |---|---|
 | [docs/method.md](docs/method.md) | the derivation, `STEP1`–`STEP4`, equation by equation, with the S-R-S paper's equation numbers |
+| [docs/method_illustrated.html](docs/method_illustrated.html) | the same derivation, typeset as a single offline HTML page: the formulas are real typeset math instead of images, the hand sketches are redrawn as vector figures, and rendered screenshots of the two real arms are included |
 | [docs/branch_analysis.md](docs/branch_analysis.md) | four branches or eight: the measurement, and why the obvious test cannot see the difference |
 | [docs/browser_debugging.md](docs/browser_debugging.md) | nothing on screen, nothing moving: the Swift API traps this repository walked into, and how to see the page with Playwright |
 | [docs/limitations.md](docs/limitations.md) | joint limits, `q₇ = ±90°`, symmetries that do not exist, the published code's defects |

@@ -129,7 +129,7 @@ fk.solve_closest(pose, q7, reference=previous)   # 离参考构型最近的一�
 |---|---|
 | `franka_ik/` | 库本体：`model`（改进 DH 正解、雅可比）、`geometry`（S-R-S 化归）、`solver`（八分支解析反解）、`analysis`（解集研究），以及负责画图与演示页面的 `viz`、`report` |
 | `original/` | 2020 年的实现，原样保留：`panda.py`、`ik_ca.py`、`ik_ca2.py`、`test.ipynb` |
-| `docs/` | `method.md`、`branch_analysis.md`、`limitations.md`、`api.md`，以及作者当年的 `original_notes_zh.md` |
+| `docs/` | `method.md`、`method_illustrated.html`、`branch_analysis.md`、`limitations.md`、`api.md`，以及作者当年的 `original_notes_zh.md` |
 | `franka解析反解方法.pdf` | 手写推导，`STEP1`–`STEP4` |
 | `tests/` | 测试套件，包含与 `original/` 的逐分支对照 |
 | `examples/` | 11 个例子：`01`–`06` 是 matplotlib 的推导走读（模型、化归、八个分支、关节限位、覆盖率、跟踪），`07`–`11` 是 Swift 交互式 3D 演示 |
@@ -142,6 +142,7 @@ fk.solve_closest(pose, q7, reference=previous)   # 离参考构型最近的一�
 | 文档 | 内容 |
 |---|---|
 | [docs/method.md](docs/method.md) | 推导全过程，按 `STEP1`–`STEP4` 逐式展开，并标注 S-R-S 论文的公式号 |
+| [docs/method_illustrated.html](docs/method_illustrated.html) | 同一份推导的 HTML 排版版（单文件，无需联网）：公式由图片改为排版公式，手绘示意图重画为矢量图，并配以真实机械臂的渲染截图 |
 | [docs/branch_analysis.md](docs/branch_analysis.md) | 四个分支还是八个：测量方法，以及为什么最直观的检验看不出问题 |
 | [docs/browser_debugging.md](docs/browser_debugging.md) | 窗口空白、动画不动：踩过的 Swift API 坑，以及怎么用 Playwright 直接看页面 |
 | [docs/limitations.md](docs/limitations.md) | 关节限位、`q₇ = ±90°`、并不存在的对称性、原代码的缺陷 |
