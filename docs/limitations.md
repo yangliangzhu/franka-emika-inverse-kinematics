@@ -286,6 +286,46 @@ wrist collapse onto each other; `solve` merges configurations that agree to with
 joint, so the returned list is shorter there. That is intended, but it means "the number of
 solutions" is not a continuous function of the pose.
 
+**Consequence for the numerical cross-check, and why its tolerances are two.** Near a
+singularity a joint can move a long way without moving the tool, and an optimiser stops on the
+*pose* criterion, so it halts a fraction of a degree from the configuration it is standing on.
+One measured case, from `python3 scripts/study_wrist_offset_ik.py --optimiser` (pose 6 of the
+`seed 0` sample):
+
+| quantity | value |
+|---|---|
+| manipulability of the pose | 2.65 × 10⁻⁴ |
+| smallest singular value of the Jacobian | 6.0 × 10⁻⁴ |
+| distance from the IPOPT result to the nearest analytic branch | 0.0854° |
+| pose change caused by a configuration offset of that size | 7.8 × 10⁻⁹ |
+
+The configuration offset is real; what it is *not* is an unexplained branch, because it leaves the
+pose where it was. The same pose shows how far that can go — it is `seed 0`, pose 6, so
+`--optimiser` prints it and this reproduces it:
+
+```python
+q = np.radians([31.119, -32.418, -35.766, -23.653, -90.038, 133.362, -137.275])
+pose = fk.fk_flange(q)
+solutions = fk.solve(pose, q[6])            # 6 in-limit solutions, not 8
+plain = next(s for s in solutions if s.label == "q4- phi- plain")
+flip  = next(s for s in solutions if s.label == "q4- phi- flip")
+np.degrees(flip.q) - np.degrees(plain.q)    # [-180, -64.8, -180, 0, 0, 0, 0] deg
+np.abs(fk.fk_flange(plain.q) - fk.fk_flange(flip.q)).max()   # 2.2e-16
+```
+
+Two branches of the *same* elbow root and the *same* arm angle, 64.8° apart at joint 2 and 180°
+apart at joints 1 and 3, reach the same pose to machine precision. That is not an artefact of the
+reduction — both configurations are exact solutions, and the pose is genuinely near-degenerate
+there (smallest singular value 6.0 × 10⁻⁴). It is why a joint-space tolerance and a pose
+tolerance have to be kept apart.
+
+`completeness_check` therefore separates the two criteria — `tolerance` says how close counts as
+"this is that branch", `counter_example_tolerance` says when a result stops being
+converged-imprecisely and becomes a counter-example — and keeps the full `distances_deg` list so
+the margin is visible rather than folded into a threshold. Over 35 poses and 400–600 starts each,
+the counts are 109 IPOPT solutions, 0 counter-examples, largest distance 0.0854°
+(`docs/provenance.md` §4).
+
 ## 9. Two DH conventions, reconciled numerically rather than by inspection
 
 `franka_ik/model.py` uses modified (Craig) DH;
@@ -366,10 +406,44 @@ solve(pose, float(q[6]), within_limits_only=True)   # -> []  (empty)
 classify_failure(pose, float(q[6]))                 # -> 'no_valid_branch'
 ```
 
-The eight branches come back with `q₂ = 0` and a pose residual of `2.55e-2`, or with
-`q₂ = ±106.23°` / `±73.70°` and a residual of `1e-16` but **outside** the `[-100°, 100°]`
-range of joint 2. Perturbing the generating configuration by `±0.01°` in joint 2 restores
-two solutions, including the target itself.
+All eight branches come back, and they fail in **two different ways** — worth keeping
+apart, because only one of them is the singularity:
+
+| branches | `q₂` | pose residual | why it is not returned |
+|---|---|---|---|
+| `q4+ phi+ plain` and `flip` | `0.000°` | **2.55e-2** | the reconstruction collapsed, so the pose is simply wrong |
+| `q4+ phi- plain` and `flip` | `±106.229°` | 2.2e-16, 3.3e-16 | **exact**, but joint 2 is outside `[-100°, 100°]` |
+| `q4- phi+ plain` and `flip` | `±32.579°` | 5.6e-16 | **exact**, but joint 4 is `+46.49°`, outside `[-175°, -5°]` |
+| `q4- phi- plain` and `flip` | `±73.696°` | 3.3e-16 | same: joint 4 is `+46.49°` |
+
+So the pose has six *exact* solutions; all six are outside the joint limits, and the only
+two the limits accept are the two the singularity got wrong. `franka_ik` returns nothing
+because nothing is both correct and in range — which is the right answer to the question it
+was asked, and the wrong answer to the question a controller meant.
+
+That configuration is hand-picked to be maximally unlucky, so the size of the problem is a
+separate measurement, and it is much smaller than the reproducer suggests. Sampling 200
+configurations near `q₂ = 0` (joint 2 drawn in a band, the other six joints perturbed by up
+to `±20°` from the values above):
+
+| band on `q₂` | poses with no in-limit solution |
+|---|---|
+| exactly `0` | **140 / 200** (70 %) |
+| `±1e-6°` | 150 / 200 (75 %) |
+| `±1e-5°` | 74 / 200 (37 %) |
+| `±1e-4°` | 14 / 200 (7 %) |
+| `±1e-3°` and wider | 0 / 200 |
+
+So the failure needs `q₂` within about `1e-4` degrees of zero, and even then it takes an
+unlucky configuration — 70 %, not 100 %. Tracking a real trajectory is a third measurement
+again: `examples/11_swift_tracking.py` drives the tool down a straight line that sweeps
+joint 2 through zero, and with 1000 steps it passes `6.3e-3°` away and solves all 1000,
+worst pose residual `6.1e-13`. A path that *crosses* the singularity almost never lands in
+the window; a path that *arrives* at it, or a controller commanded to hold that exact
+configuration, loses the pose for that one step.
+
+The distinction is worth keeping: this is a coordinate singularity of the reduction, not a
+place where the arm stops working, and the numbers above are what "coordinate" means here.
 
 Two things are worth saying about this.
 
@@ -378,10 +452,13 @@ Two things are worth saying about this.
   It is not one of the four defects listed in §4, §5 and §7 that `franka_ik` repairs — it
   is a limitation that remains.
 * **The coverage study cannot see it.** The condition `q₂ = 0` has measure zero, so a
-  random sample never hits it (`coverage_study(300, seed=0)` still reports 300/300). It
-  shows up in practice when a *planned* path crosses the singular value, which is how it
-  was found: a joint-space interpolation in `examples/06_tracking.py` passed through
-  `q₂ = 0`. That example therefore keeps joint 2 away from zero and says so.
+  random sample never hits it (`coverage_study(300, seed=0)` still reports 300/300), and
+  the window in the table above is three orders of magnitude narrower than the sample
+  spacing anyway. It shows up when a *planned* path is commanded through that exact value.
+  `examples/10_swift_singularities.py` is the interactive form of this table;
+  `examples/11_swift_tracking.py` tracks a Cartesian line across `q₂ = 0` and prints, per
+  step, that the crossing is uneventful — which is the honest counterpart to this warning
+  rather than a contradiction of it.
 
 A proper fix is a dedicated branch for `sin θ₂ ≈ 0`, in the spirit of the remedy Shimizu
 et al. give for the shoulder singularity in their Section II-E: fix one of the two

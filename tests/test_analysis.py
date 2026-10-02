@@ -240,6 +240,89 @@ def test_classify_failure_raises_on_non_finite_input() -> None:
             analysis.classify_failure(pose, q7)
 
 
+def test_the_limits_do_not_explain_the_discarded_elbow_root() -> None:
+    """The second elbow root is not discarded by the joint limits, and is not unusable.
+
+    ``docs/provenance.md`` is where this matters: the published code takes one root
+    of the ``STEP2`` quadratic, and the natural first guess -- and the reason the
+    closest published work gives for dropping one of its two elbow variants -- is
+    that the other root violates the Panda's joint limits.  Measured over 300
+    in-limit configurations at ``seed 0``, it does not.  Every one of the 35
+    configurations that sit on the second root has an in-limit solution there, and
+    for 2 of them that root is the only way to reach the pose at all.
+
+    The same sample also pins the one number in ``docs/provenance.md`` §3 that
+    speaks to the published reasoning: **all 153** in-limit solutions on the second
+    root have joint 4 inside the band the ICRA 2022 paper quotes for the variant it
+    discards, ``[-26.76, -4]`` deg.  Both accounts agree about the window; they
+    disagree about whether it is empty.
+    """
+    lower, upper = model.lower_limits(), model.upper_limits()
+    rng = np.random.default_rng(0)
+
+    on_second_root = 0
+    with_an_in_limit_solution = 0
+    published_reaches_it_too = 0
+    published_reports_it_unreachable = 0
+    in_limit_q4: list[float] = []
+    out_of_limit_q4: list[float] = []
+
+    for _ in range(300):
+        target = rng.uniform(lower, upper)
+        pose = model.fk_flange(target)
+        # Every candidate for this joint 7, and only then the in-limit ones: the
+        # question is whether the second root is *blocked* by the limits, so the
+        # whole family has to be visible before the filter is applied.
+        candidates = solver.solve(pose, float(target[6]), within_limits_only=False)
+        plus = [s for s in candidates if s.q4_root == analysis.PUBLISHED_Q4_ROOT]
+        minus = [s for s in candidates if s.q4_root != analysis.PUBLISHED_Q4_ROOT]
+        in_limit_plus = [s for s in plus if _inside_limits(s.q, lower, upper)]
+        in_limit_minus = [s for s in minus if _inside_limits(s.q, lower, upper)]
+
+        if any(_same_configuration(s.q, target) for s in minus) and not any(
+            _same_configuration(s.q, target) for s in plus
+        ):
+            on_second_root += 1
+            if in_limit_minus:
+                with_an_in_limit_solution += 1
+            if in_limit_plus:
+                published_reaches_it_too += 1
+            else:
+                published_reports_it_unreachable += 1
+
+        for s in minus:
+            (in_limit_q4 if _inside_limits(s.q, lower, upper) else out_of_limit_q4).append(
+                float(np.degrees(s.q[3]))
+            )
+
+    assert on_second_root == 35
+    assert with_an_in_limit_solution == on_second_root, "the second root is not limit-blocked"
+    assert published_reaches_it_too == 33
+    assert published_reports_it_unreachable == 2
+    assert len(in_limit_q4) == 153
+    assert len(out_of_limit_q4) == 275
+    assert min(in_limit_q4) >= -26.76
+    assert max(in_limit_q4) <= -4.0
+    # The 275 out-of-limit solutions are *not* checked for a joint-4 window: they
+    # violate some joint of the arm, and joint 4 is only sometimes the one that is
+    # out of range.  Their distribution is in the study's JSON instead.
+    assert out_of_limit_q4
+
+
+def _same_configuration(a: np.ndarray, b: np.ndarray, tol: float = 1e-6) -> bool:
+    """True when two configurations differ only by whole turns, per joint."""
+    delta = np.degrees(a) - np.degrees(b)
+    return bool(np.all(np.abs((delta + 180.0) % 360.0 - 180.0) < tol))
+
+
+def _inside_limits(q: np.ndarray, lower: np.ndarray, upper: np.ndarray) -> bool:
+    """True when every joint is inside its range, with a hair of slack for rounding."""
+    degrees = np.degrees(q)
+    return bool(
+        np.all(degrees >= np.degrees(lower) - 1e-9) and np.all(degrees <= np.degrees(upper) + 1e-9)
+    )
+
+
 def test_study_pose_marks_exactly_the_recovering_branches(pose_cases, angdiff) -> None:
     """Fact 11: ``recovers_target`` is set precisely on the branches that return ``q``.
 
