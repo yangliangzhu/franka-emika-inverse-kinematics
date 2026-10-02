@@ -190,31 +190,19 @@ uv run --extra viz python examples/07_swift_branches.py --pose second_root --mod
 ## 来龙去脉
 
 这套闭式解是 **2020 年底**独立推导完成的：把腕部偏置旋转进一段加长的连杆，将 Panda 化归为
-一族**等效** S-R-S 构型，再用 KUKA（S-R-S）的闭式解求解，冗余量取关节 7。2021 年初它被用在
-一台咽拭子采样机器人上——给定位姿后沿关节 7 离散枚举，得到完整的候选解集，按可操作度与关节
-限位筛选初始姿态，再交给视觉伺服的数值解做局部细化。之所以用解析解做这一步筛选，一是快，
-二是数值解很难得到足够 dense 的候选集。**2021 年 2 月 2 日**首次公开 push
-（`git show --stat 295c6e0`），这是这份记录里任何人都能查证的部分。
+一族**等效** S-R-S 构型，再用 S-R-S 的闭式解求解，冗余量取关节 7。**2021 年 2 月 2 日**
+首次公开 push（`git show --stat 295c6e0`）。
 
-**本仓库不主张任何优先权。** 同一化归（腕部偏置、以关节 7 参数化冗余、八个分支）后来由
-He 与 Liu 独立发表于 ICRA 2022。本仓库的代码与推导完成于那篇论文之前，且**没有引用、也没有
-使用**它，因此下面不把它列为方法的来源；两份工作各自独立完成。
+**本仓库无任何优先权主张，供同行交流参考。**
 
-本仓库真正多做的一件事，是**测量自己的完备性**：与 2020/2023 年的实现逐分支比对
-（1200/1200 一致，最大偏差 1.30 × 10⁻¹³ rad）、用独立的 CasADi + IPOPT 枚举反查
+仓库的主要工作，是**测量这份实现自己的完备性**：与 `original/` 里 2020/2023 年的实现逐分支
+比对（1200/1200 一致，最大偏差 1.30 × 10⁻¹³ rad）、用独立的 CasADi + IPOPT 枚举反查
 （15 个位姿 56 个解，0 个反例）、统计覆盖率（四个分支 265/300，八个分支 300/300），
 以及 `q₂ = 0` 与 `q₇ = ±90°` 两处奇异性窗口的宽度。每个数字都配着生成它的命令，见
 [docs/provenance.md](docs/provenance.md)。
 
 2020/2023 年的代码原封不动保存在 `original/` 里，`docs/original_notes_zh.md` 是作者当年的
 说明，推导本身则是仓库根目录那份手写 PDF。
-
-使用的话，请引用方法所依赖的已发表出处：
-
-> M. Shimizu, H. Kakuya, W.-K. Yoon, K. Kitagaki, K. Kosuge, "Analytical Inverse Kinematic
-> Computation for 7-DOF Redundant Manipulators With Joint Limits and Its Application to
-> Redundancy Resolution", *IEEE Transactions on Robotics*, 24(5):1131–1142, 2008.
-> [doi:10.1109/TRO.2008.2003266](https://doi.org/10.1109/TRO.2008.2003266)
 
 ## 许可证
 
