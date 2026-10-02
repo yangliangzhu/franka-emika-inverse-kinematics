@@ -221,18 +221,24 @@ arm. `third_party/README.md` has the provenance; `examples/README.md` lists all 
 
 ## Provenance
 
-An original, self-derived method — first pushed in **February 2021**, when the author worked with
-a Franka arm and could not find a published analytical inverse kinematics for it. It reduces the
-arm to an *equivalent* S-R-S family by rotating the wrist offset into a lengthened link, and
-solves that with the closed form for KUKA-style S-R-S arms, parameterised by joint 7.
+The closed form was derived independently at the end of **2020**: the wrist offset is rotated into
+a lengthened link, the arm is reduced to an *equivalent* S-R-S family, and that is solved with the
+closed form for KUKA-style S-R-S arms, parameterised by joint 7.  Early in 2021 it was used on a
+throat-swab sampling robot: given a pose, joint 7 is enumerated on a grid to get the complete
+candidate set, the candidates are filtered by manipulability and joint limits to pick an initial
+posture, and a visual-servoing numerical solve refines it.  The closed form does that first step
+because it is fast, and because a numerical solver struggles to produce a candidate set dense
+enough to choose from.  It was first pushed publicly on **2 February 2021**
+(`git show --stat 295c6e0`), which is the part of this record anyone can check.
 
-It is **not novel**, and the repository should not pretend otherwise. He and Liu published the
-same reduction, with the same redundancy parameter and the same eight branches, at ICRA 2022
-([IEEE Xplore 9646185](https://ieeexplore.ieee.org/abstract/document/9646185)); their preprint
-postdates the first push here by about eight months, but a repository nobody reads is not a
-scientific claim. What this repository does that the published work does not is *measure* its own
-completeness — against the 2020/2023 files, against an independent IPOPT enumeration, and against
-the branch count — and record where the method is wrong.
+**This repository claims no priority.**  The same reduction -- the wrist offset, joint 7 as the
+redundancy parameter, eight branches -- was published independently by He and Liu at ICRA 2022.
+The code and the derivation here predate that paper and neither cite nor use it, so it is not
+listed below as a source of the method; the two were arrived at independently.
+
+What this repository adds is a *measurement of its own completeness* -- branch-by-branch agreement
+with the 2020/2023 files, an independent CasADi + IPOPT enumeration as a counter-check, the branch
+count -- and a record of where the method is wrong.
 
 Three findings from that measurement are worth stating plainly, and all three are in
 [docs/provenance.md](docs/provenance.md) with their numbers:
@@ -241,7 +247,7 @@ Three findings from that measurement are worth stating plainly, and all three ar
   (`solution_theta_4(lamda, choice)`) and then pinned it at the single call site, leaving the
   alternative commented out on the next line — so a root was dropped on purpose, not overlooked,
   and the 2023 rewrite that `original/` preserves makes a different choice again;
-* the joint limits are **not** the reason, and the published `limit_joints` never checks one: it
+* the joint limits are **not** the reason, and the 2020/2023 `limit_joints` never checks one: it
   wraps into hand-written windows that are wider than the limits `Panda` declares;
 * every one of the 35 configurations that sit on the discarded root has a valid in-limit solution
   there, so the second root is a genuine engineering trade, not a dead branch.
@@ -249,16 +255,12 @@ Three findings from that measurement are worth stating plainly, and all three ar
 The 2020/2023 code is preserved unmodified in `original/`; `docs/original_notes_zh.md` is the
 author's own summary, and the derivation itself is the hand-written PDF at the repository root.
 
-If you use the method, cite the published derivations it stands on:
+If you use the method, cite the published derivation it stands on:
 
 > M. Shimizu, H. Kakuya, W.-K. Yoon, K. Kitagaki, K. Kosuge, "Analytical Inverse Kinematic
 > Computation for 7-DOF Redundant Manipulators With Joint Limits and Its Application to
 > Redundancy Resolution", *IEEE Transactions on Robotics*, 24(5):1131–1142, 2008.
 > [doi:10.1109/TRO.2008.2003266](https://doi.org/10.1109/TRO.2008.2003266)
-
-> Y. He, S. Liu, "Analytical Inverse Kinematics for Franka Emika Panda — a Geometrical Solver for
-> 7-DOF Manipulators with Unconventional Design", *IEEE International Conference on Robotics and
-> Automation (ICRA)*, 2022.
 
 ## License
 

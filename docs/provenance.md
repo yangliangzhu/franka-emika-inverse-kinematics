@@ -107,14 +107,18 @@ The relevant paper appeared after the 2021 prototype:
 > [preprint](https://github.com/ffall007/franka_analytical_ik/blob/main/paper_preprint.pdf) ·
 > [Semantic Scholar](https://www.semanticscholar.org/paper/10b44ac01066378db5d8db21dc1154ab79c8373e)
 
-It is the same idea, arrived at independently and published properly: joint 7 is fixed as the
-redundancy parameter, the elbow triangle is solved in two variants, and the count comes out as
+It is the same idea, arrived at independently: joint 7 is fixed as the redundancy parameter, the
+elbow triangle is solved in two variants, and the count comes out as
 `2 (q4) × 2 (q6) × 2 (q1,q2) = 8` joint configurations for a given pose and joint 7 — exactly the
 `8` of `franka_ik.NUM_BRANCHES`. Its own dates put the preprint at October 2021 or later
 (its reference list has URLs "[Accessed on 8 October 2021]"), against this repository's first
-public push in February 2021. That is the honest position: **first, but not novel.** Being first
-to a repository nobody read is not a scientific claim, and the paper's claim is the one that
-counts.
+public push in February 2021 and a derivation completed at the end of 2020, used on a real arm
+before either.
+
+That is the record, and **no priority is claimed here**: the dates are stated, the numbers below
+are reproducible, and what a reader makes of the ordering is their call. This repository is the
+record of an independent derivation plus the measurements that follow; the paper is the citable
+artifact for the method.
 
 It is also, of the two of us, the one that states the reasoning for discarding a root. In its own
 words: there are two variants for the elbow angle, "Case A1" and "Case A2"; on a Franka "the

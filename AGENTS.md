@@ -23,18 +23,25 @@ not, and which published work got there independently.
 
 ## The provenance rule
 
-The method here is **not** novel. He and Liu published the same reduction — joint 7 as the
-redundancy parameter, the elbow solved in two variants, eight branches per pose — at ICRA 2022
+The method here is **not** novel, and no priority is claimed for it. He and Liu published the same
+reduction — joint 7 as the redundancy parameter, the elbow solved in two variants, eight branches
+per pose — at ICRA 2022
 ([IEEE Xplore 9646185](https://ieeexplore.ieee.org/abstract/document/9646185),
-[preprint](https://github.com/ffall007/franka_analytical_ik/blob/main/paper_preprint.pdf)). The
-first push here predates their preprint by about eight months (`git show --stat 295c6e0`,
-2021-02-02), but a repository nobody read is not a scientific claim.
+[preprint](https://github.com/ffall007/franka_analytical_ik/blob/main/paper_preprint.pdf)). What
+this repository keeps is the record: derived at the end of 2020, used on a real arm early in 2021,
+first pushed publicly on 2021-02-02 (`git show --stat 295c6e0`). State those dates as dates; do
+not argue from them, and do not grade the work in the documents.
 
 Three consequences for anyone editing this repository:
 
 * **Never write a novelty claim.** Not in the README, not in a docstring, not in a commit
   message. The contribution is the *measurement* — the coverage study, the cross-check against
   `original/`, the IPOPT completeness test — and that is what the documents should claim.
+* **State the record; claim no priority; do not editorialise about the repository's standing.**
+  "Derived at the end of 2020, first pushed 2021-02-02, used on a real arm, no priority claimed,
+  here are the measurements and the commands" is the house style. Grading the repository in its
+  own documents is not: a self-assessment is neither a number nor a fact about the code, and it
+  invites the reader to judge the work instead of checking it.
 * **Keep `docs/provenance.md` accurate.** Its numbers come from
   `python3 scripts/study_wrist_offset_ik.py`; if a change moves one of them, the document moves
   with it, and the change needs to say why.

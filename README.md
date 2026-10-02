@@ -189,16 +189,22 @@ uv run --extra viz python examples/07_swift_branches.py --pose second_root --mod
 
 ## 来龙去脉
 
-这是一套自行推导的方法，**2021 年 2 月**首次推到 GitHub，当时作者刚接触 Franka 机械臂，
-在网上找不到 Panda 的解析反解。思路是把腕部偏置旋转进一段加长的连杆，把机械臂化归为
-一族**等效** S-R-S 构型，再用 KUKA（S-R-S）闭式解求解，冗余量取关节 7。
+这套闭式解是 **2020 年底**独立推导完成的：把腕部偏置旋转进一段加长的连杆，将 Panda 化归为
+一族**等效** S-R-S 构型，再用 KUKA（S-R-S）的闭式解求解，冗余量取关节 7。2021 年初它被用在
+一台咽拭子采样机器人上——给定位姿后沿关节 7 离散枚举，得到完整的候选解集，按可操作度与关节
+限位筛选初始姿态，再交给视觉伺服的数值解做局部细化。之所以用解析解做这一步筛选，一是快，
+二是数值解很难得到足够 dense 的候选集。**2021 年 2 月 2 日**首次公开 push
+（`git show --stat 295c6e0`），这是这份记录里任何人都能查证的部分。
 
-但它**并不新颖**，仓库不该装作新颖：He 与 Liu 在 ICRA 2022 发表了同样的化归、同样的冗余
-参数、同样的八个分支（[IEEE Xplore 9646185](https://ieeexplore.ieee.org/abstract/document/9646185)）。
-他们的预印本比这里的首次提交晚约八个月，但"没人看的仓库"不算科学优先权。本仓库相对已发表
-工作真正多做的一件事，是**测量自己的完备性**——与原代码逐分支比对、用独立的 IPOPT 枚举
-反向验证、统计分支数——并把自己的错误记下来。时间线、并排数据和"哪些部分真值钱"的排序
-都在 [docs/provenance.md](docs/provenance.md)。
+**本仓库不主张任何优先权。** 同一化归（腕部偏置、以关节 7 参数化冗余、八个分支）后来由
+He 与 Liu 独立发表于 ICRA 2022。本仓库的代码与推导完成于那篇论文之前，且**没有引用、也没有
+使用**它，因此下面不把它列为方法的来源；两份工作各自独立完成。
+
+本仓库真正多做的一件事，是**测量自己的完备性**：与 2020/2023 年的实现逐分支比对
+（1200/1200 一致，最大偏差 1.30 × 10⁻¹³ rad）、用独立的 CasADi + IPOPT 枚举反查
+（15 个位姿 56 个解，0 个反例）、统计覆盖率（四个分支 265/300，八个分支 300/300），
+以及 `q₂ = 0` 与 `q₇ = ±90°` 两处奇异性窗口的宽度。每个数字都配着生成它的命令，见
+[docs/provenance.md](docs/provenance.md)。
 
 2020/2023 年的代码原封不动保存在 `original/` 里，`docs/original_notes_zh.md` 是作者当年的
 说明，推导本身则是仓库根目录那份手写 PDF。
@@ -209,10 +215,6 @@ uv run --extra viz python examples/07_swift_branches.py --pose second_root --mod
 > Computation for 7-DOF Redundant Manipulators With Joint Limits and Its Application to
 > Redundancy Resolution", *IEEE Transactions on Robotics*, 24(5):1131–1142, 2008.
 > [doi:10.1109/TRO.2008.2003266](https://doi.org/10.1109/TRO.2008.2003266)
-
-> Y. He, S. Liu, "Analytical Inverse Kinematics for Franka Emika Panda — a Geometrical Solver for
-> 7-DOF Manipulators with Unconventional Design", *IEEE International Conference on Robotics and
-> Automation (ICRA)*, 2022.
 
 ## 许可证
 
