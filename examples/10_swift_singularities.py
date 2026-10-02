@@ -69,10 +69,13 @@ from franka_ik.swift_viz import (  # noqa: E402
     add_cloud,
     add_shapes,
     apply_camera,
+    flange_axes,
     launch_env,
     manipulability_ellipsoid,
     tool_axes,
+    tool_stem,
     update_manipulability_ellipsoid,
+    update_tool_stem,
 )
 
 #: The configuration from ``docs/limitations.md`` §12: inside the joint limits,
@@ -255,14 +258,20 @@ def main(argv: List[str] | None = None) -> int:
                 shape.color = [*_COLOUR_LIVE, 1.0]
 
     ellipsoid = manipulability_ellipsoid(moved, scale=args.ellipsoid_scale)
-    reference_frame = tool_axes(reference, length=0.12)
-    live_frame = tool_axes(moved, length=0.12)
+    # The frames mark the **flange**, which is the pose solved for here; the live arm
+    # also carries the factory tool point 0.1034 m further along, with the distance
+    # drawn, because ``link7.dae`` stops at the flange
+    # (docs/browser_debugging.md section 3).
+    reference_frame = flange_axes(reference, length=0.12)
+    live_frame = flange_axes(moved, length=0.12)
+    live_tool = tool_axes(moved, length=0.055)
+    live_stem = tool_stem(moved)
     # One group per arm: ~17 shapes each, and with a browser attached every
     # ``add_shape`` is a blocking round trip (docs/browser_debugging.md section 2.5).
     # Both arms stay movable -- a group reports its parts' current poses each frame.
     add_cloud(env, reference_arm.shapes, name="reference")
     add_cloud(env, live_arm.shapes, name="live")
-    add_shapes(env, [ellipsoid, reference_frame, live_frame])
+    add_shapes(env, [ellipsoid, reference_frame, live_frame, live_tool, live_stem])
     apply_camera(env, args.camera)
 
     readout: Optional[object] = None
@@ -292,6 +301,8 @@ def main(argv: List[str] | None = None) -> int:
             f"{verdict}",
             "the window is 1e-4 deg wide, the slider step is 1e-5: one arrow-key press "
             "is a tenth of it",
+            "frames: the flange (the pose solved for), and the factory tool point "
+            "0.1034 m further along with the distance drawn",
         ]
 
     def on_offset(value: float) -> None:
@@ -300,7 +311,9 @@ def main(argv: List[str] | None = None) -> int:
         moved[1] = base[1] + np.radians(float(value))
         live_arm.update(moved)
         update_manipulability_ellipsoid(ellipsoid, moved)
-        live_frame.T = model.fk_tool(moved)
+        live_frame.T = model.fk_flange(moved)
+        live_tool.T = model.fk_tool(moved)
+        update_tool_stem(live_stem, moved)
         if readout is not None:
             swift_app.set_readout(readout, readout_lines())
 

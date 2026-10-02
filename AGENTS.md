@@ -172,10 +172,10 @@ model and entry points, and the session-scoped `coverage_report`.
 | `tests/test_branches.py` | 14 | **the scientific claim**: the library reproduces every published branch, the published subset is the `+` elbow root, it is incomplete, and the published code's defects |
 | `tests/test_analysis.py` | 13 | the coverage and solution-count studies, `reachable_distance_range`, `classify_failure` |
 | `tests/test_numerical.py` | 6 | the CasADi model, the IPOPT cross-check, and that `import franka_ik` stays CasADi-free |
-| `tests/test_swift_viz.py` | 23 | the Swift layer: the skeleton sits on the model's own joint origins, the URDF check **rejects another arm**, and the sample poses behave as documented. Skips without the `viz` extra |
+| `tests/test_swift_viz.py` | 24 | the Swift layer: the skeleton sits on the model's own joint origins, the URDF check **rejects another arm**, and the sample poses behave as documented. Skips without the `viz` extra |
 | `tests/test_swift_app.py` | 17 | the examples' shared plumbing without Swift at all: the interaction loop follows the live slider value, a play hook's write-back sticks, the tolerance can find a `1e-4` degree window, and Swift's empty first radio event is not a choice |
 
-130 tests in total, and 107 of them pass without the `viz` extra. The per-module counts are a
+131 tests in total, and 107 of them pass without the `viz` extra. The per-module counts are a
 reader's map to the suite rather than a contract, so a new test belongs in the module that matches
 its claim and does not need this table edited in the same commit.
 

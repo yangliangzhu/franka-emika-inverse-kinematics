@@ -75,10 +75,13 @@ from franka_ik import model, swift_app  # noqa: E402
 from franka_ik.swift_viz import (  # noqa: E402
     add_shapes,
     apply_camera,
+    flange_axes,
     launch_env,
     manipulability_ellipsoid,
     tool_axes,
+    tool_stem,
     update_manipulability_ellipsoid,
+    update_tool_stem,
 )
 
 #: Cartesian offset of the line's end from its start, in metres.  Straight down:
@@ -275,9 +278,15 @@ def main(argv: List[str] | None = None) -> int:
     arm_shapes = swift_app.build_arm_shapes(args, arm=arm)
     arm_shapes.update(q0)
     ellipsoid = manipulability_ellipsoid(q0, scale=0.12)
-    frame = tool_axes(q0, length=0.12)
+    # The frame follows the **flange**, which is the pose ``plan`` solves for and the
+    # frame the readout's residual is measured in; the tool point 0.1034 m further along
+    # is drawn with its distance, because the meshes stop at the flange
+    # (docs/browser_debugging.md section 3).
+    frame = flange_axes(q0, length=0.12)
+    tool_frame = tool_axes(q0, length=0.055)
+    stem = tool_stem(q0)
     add_shapes(env, arm_shapes.shapes)
-    add_shapes(env, [ellipsoid, frame])
+    add_shapes(env, [ellipsoid, frame, tool_frame, stem])
     apply_camera(env, args.camera)
 
     # The plan is drawn up to its first failure: a step that returned no solution has
@@ -325,6 +334,8 @@ def main(argv: List[str] | None = None) -> int:
             f"pose residual = {residuals[index]:.1e} &nbsp; manipulability = "
             f"{model.manipulability(values):.3e}",
             f"joint step from the previous frame = {joint_step:.4f} deg",
+            "frames: the flange (the pose the plan solves for) and the tool point "
+            "0.1034 m along its z",
         ]
         if failed is not None and index >= last:
             lines.append(
@@ -342,7 +353,9 @@ def main(argv: List[str] | None = None) -> int:
         values = solutions[index]
         arm_shapes.update(values)
         update_manipulability_ellipsoid(ellipsoid, values)
-        frame.T = model.fk_tool(values)
+        frame.T = model.fk_flange(values)
+        tool_frame.T = model.fk_tool(values)
+        update_tool_stem(stem, values)
         if readout is not None:
             swift_app.set_readout(readout, readout_lines(index))
 

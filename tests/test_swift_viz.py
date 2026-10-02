@@ -7,6 +7,9 @@ geometry is right, and that is what this module pins:
 
 * :func:`~franka_ik.swift_viz.arm_keypoints` reproduces the joint origins the model
   reports, so a drawn skeleton cannot drift away from the solver;
+* the three end frames -- wrist, flange and tool -- are 0.107 m and 0.1034 m apart, and
+  the markers and stem the examples draw are on them, which is the difference between a
+  pose marker and a frame hanging in space;
 * :func:`~franka_ik.swift_viz.joint_axes` returns the axes the solver turns about;
 * :func:`~franka_ik.swift_viz.arm_plane_outline` declines to draw a plane that does
   not exist (a straight arm), instead of returning a degenerate shape;
@@ -295,6 +298,53 @@ def test_meshes_ask_for_the_y_up_correction() -> None:
         assert shape.to_dict()["y_up"] is True
     # ... and it is switchable, for a format that does not want the correction.
     assert sv.link_mesh_shapes(urdf, None, y_up=False)[0].to_dict()["y_up"] is False
+
+
+def test_the_three_end_frames_are_where_the_model_says() -> None:
+    """Wrist, flange and tool are ``0.107`` m and ``0.1034`` m apart, along the flange's z.
+
+    This is the pair of numbers that decides where a drawn marker belongs, and getting it
+    wrong is visible only as a frame hanging in space -- which is how it was reported.
+    Measured: ``fk_flange`` is ``0.107`` m from the wrist frame (``forward_kinematics``
+    row 6, the DH ``d7``) along its own ``z``, and ``fk_tool`` is a further ``0.1034`` m
+    along the same axis rotated ``-45`` degrees about it.  So:
+    :func:`~franka_ik.swift_viz.flange_axes` marks the pose the solver returns,
+    :func:`~franka_ik.swift_viz.tool_axes` marks the factory tool centre point, and the
+    stem between them is the distance that would otherwise be a gap.
+    """
+    rng = np.random.default_rng(0)
+    lower, upper = model.lower_limits(), model.upper_limits()
+    for _ in range(10):
+        q = rng.uniform(lower, upper)
+        frames = model.forward_kinematics(q)
+        flange = model.fk_flange(q)
+        tool = model.fk_tool(q)
+        assert np.linalg.norm(flange[:3, 3] - frames[6][:3, 3]) == pytest.approx(0.107, abs=1e-12)
+        assert np.allclose(
+            flange[:3, :3].T @ (tool[:3, 3] - flange[:3, 3]), [0.0, 0.0, 0.1034], atol=1e-12
+        )
+        turn = flange[:3, :3].T @ tool[:3, :3]
+        assert np.degrees(np.arctan2(turn[1, 0], turn[0, 0])) == pytest.approx(-45.0, abs=1e-9)
+
+        marker = sv.flange_axes(q, length=0.1)
+        assert np.allclose(np.asarray(marker.T, dtype=float), flange, atol=1e-12)
+        tip = sv.tool_axes(q, length=0.05)
+        assert np.allclose(np.asarray(tip.T, dtype=float), tool, atol=1e-12)
+
+        stem = sv.tool_stem(q)
+        assert stem.length == pytest.approx(0.1034, abs=1e-12)
+        middle = 0.5 * (flange[:3, 3] + tool[:3, 3])
+        assert np.allclose(np.asarray(stem.T, dtype=float)[:3, 3], middle, atol=1e-12)
+        sv.update_tool_stem(stem, q + 0.01)
+        moved = 0.5 * (model.fk_flange(q + 0.01)[:3, 3] + model.fk_tool(q + 0.01)[:3, 3])
+        assert np.allclose(np.asarray(stem.T, dtype=float)[:3, 3], moved, atol=1e-12)
+
+    # The skeleton ends at the tool point and the meshes end at the flange, which is why
+    # the examples draw both frames rather than choosing one.
+    assert np.allclose(sv.arm_keypoints(_Q)[-1], model.fk_tool(_Q)[:3, 3], atol=1e-12)
+    assert np.linalg.norm(sv.arm_keypoints(_Q)[-1] - model.fk_flange(_Q)[:3, 3]) == pytest.approx(
+        0.1034, abs=1e-12
+    )
 
 
 def test_add_cloud_batches_a_static_cloud_into_one_assembly() -> None:

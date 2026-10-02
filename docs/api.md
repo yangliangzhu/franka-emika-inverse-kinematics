@@ -198,7 +198,10 @@ of the visualisation stack.
 | `arm_plane_outline(q, radius=0.004)` | `-> Optional[object]` | closed outline through shoulder, elbow, wrist | `sv.arm_plane_outline(q)` |
 | `manipulability_ellipsoid(q, scale=0.06, centre=None)` | `-> object` | the ellipsoid, built once at a fixed size | — |
 | `update_manipulability_ellipsoid(ellipsoid, q, centre=None)` | `-> float` | moves it and returns `model.manipulability(q)` | — |
-| `tool_axes(q, length=0.12)` | `-> object` | the tool frame | — |
+| `frame_axes(pose, length=0.12)` | `-> object` | the axes of any 4x4 frame | `sv.frame_axes(sv._se3().Trans([0,0,1]))` |
+| `flange_axes(q, length=0.12)` | `-> object` | the **flange** frame: the pose the solver takes and returns, and the frame every residual is measured in | `sv.flange_axes(q)` |
+| `tool_axes(q, length=0.12)` | `-> object` | the factory **tool** frame: `fk_flange @ TransZ(0.1034) @ R_z(-45°)`, i.e. 0.1034 m past the flange | `sv.tool_axes(q)` |
+| `tool_stem(q, radius=0.0035)` / `update_tool_stem(stem, q)` | `-> object` / `-> None` | a thin capsule covering the flange-to-tool 0.1034 m, so a tool marker is not left floating | — |
 | `reachable_shell_markers(count=300, seed=0, radius=0.004, inner=False)` | `-> List[object]` | markers exactly on the closed-form shell | `len(sv.reachable_shell_markers())` → `300` |
 | `add_shapes(env, shapes)` | `-> int` | adds shapes one at a time, because `Swift.add` silently ignores a list; each one blocks until the browser mounts it | `sv.add_shapes(env, skeleton.shapes)` → `17` |
 | `add_cloud(env, shapes, name=None)` | `-> AssemblyHandle` | adds a **group** as one assembly: one message instead of one per shape, and `env.remove(handle)` takes it off again. The group can still be moved; a colour must be set before it goes in | a 150-marker cloud: 87 s one at a time, under a second as a group |
@@ -271,6 +274,20 @@ the public `add`/`remove` API. `arm_keypoints` draws the **tool** frame, not the
 flange lies 0.107 m along joint 7's axis, inside the tool stem. And `check_kinematics` **raises**
 rather than warns when a URDF turns out to be a different arm, because the alternative is a
 plausible picture of the wrong robot.
+
+The three end frames are worth keeping apart, because mixing them is visible *only* as a marker
+hanging in space, which is how it was reported. Measured (pinned by `tests/test_swift_viz.py`):
+
+| frame | where it is | what draws it |
+|---|---|---|
+| wrist (`forward_kinematics[6]`) | joint 7's origin | the skeleton's second-to-last key point, the meshes' `link7` |
+| **flange** (`fk_flange`) | 0.107 m further along the flange's `z` (the DH `d7`) | **the pose marker** in every example, since this is the pose the solver takes |
+| tool (`fk_tool`) | 0.1034 m past the flange, rotated −45° about its `z` | the small marker, with `tool_stem` drawing the distance |
+
+The meshes draw neither offset: `link7.dae`'s geometry reaches `z = +0.1068` in the link7 frame,
+i.e. the flange and no more (measured with `trimesh`, an ad-hoc install: `trimesh.load(...).bounds`).
+The skeleton's last segment, on the other hand, is the tool stem, so it ends 0.1034 m beyond the
+flange. Both facts are why the examples draw *both* frames rather than choosing one.
 
 ## `franka_ik.report` and `franka_ik.viz` — figures and demo pages
 

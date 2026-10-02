@@ -63,7 +63,11 @@ __all__ = [
     "arm_plane_outline",
     "manipulability_ellipsoid",
     "update_manipulability_ellipsoid",
+    "frame_axes",
+    "flange_axes",
     "tool_axes",
+    "tool_stem",
+    "update_tool_stem",
     "reachable_shell_markers",
     "add_shapes",
     "add_cloud",
@@ -1063,11 +1067,11 @@ def update_manipulability_ellipsoid(
     return model.manipulability(q)
 
 
-def tool_axes(q: Sequence[float], *, length: float = 0.12) -> object:
-    """The tool frame at ``q``, as a set of axes.
+def frame_axes(pose: np.ndarray, *, length: float = 0.12) -> object:
+    """The axes of a 4x4 frame, as an ``sg.Axes``.
 
     Args:
-        q: Seven joint angles in radians.
+        pose: 4x4 transform whose rotation and origin the axes take.
         length: Axis length in metres.
 
     Returns:
@@ -1079,9 +1083,99 @@ def tool_axes(q: Sequence[float], *, length: float = 0.12) -> object:
     _, _, sg = require_viz()
     sm = _se3()
     axes = sg.Axes(length)
-    transform = model.fk_tool(q)
-    axes.T = sm.Rt(transform[:3, :3], transform[:3, 3])
+    axes.T = sm.Rt(pose[:3, :3], pose[:3, 3])
     return axes
+
+
+def flange_axes(q: Sequence[float], *, length: float = 0.12) -> object:
+    """The **flange** frame at ``q``: the frame this library solves for.
+
+    ``fk_flange`` is the pose :func:`franka_ik.solver.solve` takes and returns, so this
+    is the marker that means "the arm reached the target" -- and the frame every
+    example's pose residual is measured in.  Draw this one, not :func:`tool_axes`, in
+    anything that puts a drawing next to a residual.
+
+    Args:
+        q: Seven joint angles in radians.
+        length: Axis length in metres.
+
+    Returns:
+        An ``sg.Axes`` at ``franka_ik.model.fk_flange(q)``.
+    """
+    return frame_axes(model.fk_flange(q), length=length)
+
+
+def tool_axes(q: Sequence[float], *, length: float = 0.12) -> object:
+    """The **tool** frame at ``q``: the factory tool point, 0.1034 m past the flange.
+
+    ``fk_tool = fk_flange @ Trans_z(0.1034) @ R_z(-pi/4)`` -- measured, the offset is
+    ``[0, 0, 0.1034]`` in the flange frame and the rotation is ``-45`` degrees about its
+    ``z``.  That is where a gripper's tool centre point would be, *not* where the arm's
+    body ends: ``link7.dae``'s geometry stops at the flange (its vertices reach
+    ``z = +0.1068`` in the link7 frame, and the flange is 0.107 m along joint 7's axis),
+    so in ``--model mesh`` a marker drawn here floats 10.34 cm beyond everything visible.
+    :func:`tool_stem` draws that distance instead of leaving it to be noticed.
+
+    Args:
+        q: Seven joint angles in radians.
+        length: Axis length in metres.
+
+    Returns:
+        An ``sg.Axes`` at ``franka_ik.model.fk_tool(q)``.
+    """
+    return frame_axes(model.fk_tool(q), length=length)
+
+
+def tool_stem(q: Sequence[float], *, radius: float = 0.0035) -> object:
+    """A thin capsule from the flange to the tool point, so the 0.1034 m is a length.
+
+    The three end frames of this arm, measured (``tests/test_swift_viz.py`` pins them):
+    the wrist frame to the flange is ``0.107`` m along the flange's ``z`` (the DH
+    ``d7``), and the flange to the factory tool point is a further ``0.1034`` m along
+    the same axis.  The meshes draw the first and none of the second, so without this
+    capsule a tool-point marker is attached to nothing.
+
+    Args:
+        q: Seven joint angles in radians.
+        radius: Capsule radius in metres; it is meant to read as a stem, not a body.
+
+    Returns:
+        An ``sg.Cylinder`` centred on the flange-to-tool segment.
+
+    Raises:
+        ImportError: If the ``viz`` extra is missing.
+    """
+    _, _, sg = require_viz()
+    flange = model.fk_flange(q)
+    tool = model.fk_tool(q)
+    # The offset is a property of the arm, not of the pose, so the length is written
+    # once here and only the pose moves afterwards.
+    offset = float(np.linalg.norm(tool[:3, 3] - flange[:3, 3]))
+    stem = sg.Cylinder(radius=radius, length=offset, color=[0.55, 0.55, 0.60, 1.0])
+    update_tool_stem(stem, q)
+    return stem
+
+
+def update_tool_stem(stem: object, q: Sequence[float]) -> None:
+    """Move a stem built by :func:`tool_stem` to ``q``.
+
+    Only the pose is written: the flange-to-tool distance is ``0.1034`` m at every
+    configuration, so the length never has to change -- which is also what keeps this
+    acceptable to Swift, whose headless client does not acknowledge a size written
+    after construction.
+
+    Args:
+        stem: The shape from :func:`tool_stem`.
+        q: Seven joint angles in radians.
+    """
+    sm = _se3()
+    flange = model.fk_flange(q)
+    tool = model.fk_tool(q)
+    # ``Cylinder`` is centred on its origin and drawn along its ``z``, so the pose is
+    # the middle of the segment: the flange frame, translated half the offset.
+    centre = np.asarray(flange, dtype=float).copy()
+    centre[:3, 3] = centre[:3, 3] + 0.5 * (tool[:3, 3] - flange[:3, 3])
+    stem.T = sm.Rt(centre[:3, :3], centre[:3, 3])  # type: ignore[attr-defined]
 
 
 def reachable_shell_markers(

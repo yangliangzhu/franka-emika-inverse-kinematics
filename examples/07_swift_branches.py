@@ -14,7 +14,10 @@ What it draws:
 * every other in-limit solution for the same pose and the same joint 7, as a
   low-alpha ghost, coloured by which elbow root it came from;
 * the arm plane of the selected solution, so the two roots can be compared by eye;
-* the pose marker, which never moves: every drawn configuration reaches it.
+* the **flange** frame (drawn large), which never moves: the pose is the flange pose,
+  so every drawn configuration reaches it, and the readout's residual is measured there;
+* the factory tool point 0.1034 m further along, drawn small with the distance between
+  them as a stem, so the second marker is attached to something.
 
 The readout is the measurement, not decoration: for the pose on screen it prints
 how many solutions exist in total, how many are on the first elbow root, and
@@ -51,8 +54,11 @@ from franka_ik.swift_viz import (  # noqa: E402
     add_shapes,
     apply_camera,
     arm_plane_outline,
+    flange_axes,
     launch_env,
     tool_axes,
+    tool_stem,
+    update_tool_stem,
 )
 
 #: Ghost opacity for the solutions that are not the generating configuration.
@@ -137,7 +143,15 @@ def main(argv: List[str] | None = None) -> int:
         ghost.update(solution.q)
         ghosts.append(ghost)
 
-    pose_marker = tool_axes(q, length=0.14)
+    # Three markers, and the reason there are three is worth a line: the **flange** is
+    # the frame this library solves for, so it is the one drawn large and the one the
+    # readout's residual is measured at.  The factory **tool** point is a further
+    # 0.1034 m along the flange's z, and ``link7.dae`` stops at the flange -- so a
+    # marker at the tool point hangs in the air unless the distance is drawn, which is
+    # what the stem does (docs/browser_debugging.md section 3).
+    pose_marker = flange_axes(q, length=0.14)
+    tool_marker = tool_axes(q, length=0.065)
+    stem = tool_stem(q)
     plane = arm_plane_outline(q)
 
     # The solid arm moves, so it goes in one shape at a time; the ghosts are a fan
@@ -149,7 +163,7 @@ def main(argv: List[str] | None = None) -> int:
     # ``--pose ready`` has one in-limit solution, so there is no fan to draw; ``add_cloud``
     # refuses an empty group rather than adding nothing quietly.
     ghost_group = add_cloud(env, ghost_shapes, name="ghosts") if ghost_shapes else None
-    add_shapes(env, [pose_marker])
+    add_shapes(env, [pose_marker, tool_marker, stem])
     if plane is not None:
         add_shapes(env, [plane])
 
@@ -191,6 +205,8 @@ def main(argv: List[str] | None = None) -> int:
                 f"q (deg) = [{swift_app.degrees(solution.q, 1).strip('[]')}]",
                 f"pose residual = {float(np.abs(fk.fk_flange(solution.q) - pose).max()):.1e}"
                 f" &nbsp; manipulability = {fk.manipulability(solution.q):.4e}",
+                "big frame = the flange (the pose solved for) &nbsp; small frame + stem = "
+                "the factory tool point, 0.1034 m along its z",
             ],
         )
 
@@ -213,9 +229,11 @@ def main(argv: List[str] | None = None) -> int:
         # the first time the slider moves.  (Found by driving the slider in a browser.)
         for ghost, solution in zip(state["ghosts"], values, strict=False):
             ghost.update(solution.q)
-        # The pose marker and the arm plane move with the selection: the plane is
-        # what the two elbow roots differ in, so it has to follow.
-        pose_marker.T = model.fk_tool(chosen)
+        # The markers and the arm plane move with the selection: the plane is what the
+        # two elbow roots differ in, so it has to follow.
+        pose_marker.T = model.fk_flange(chosen)
+        tool_marker.T = model.fk_tool(chosen)
+        update_tool_stem(stem, chosen)
         plane = arm_plane_outline(chosen)
         if plane is not None:
             add_shapes(env, [plane])

@@ -165,6 +165,26 @@ is a plausible-looking robot with its base buried in `link1`.
 `panda_link8` has no visual (it is the flange marker), so there are **eight** meshes
 and the last one is 0.107 m *from* `fk_flange`, not on it.
 
+Three end frames, and mixing them up is a *visual* bug rather than a kinematic one — the
+marker is drawn, the numbers are right, and the marker floats. Measured, at any
+configuration:
+
+| from | to | distance | direction |
+|---|---|---|---|
+| wrist frame (`forward_kinematics[6]`) | flange (`fk_flange`) | `0.107` m | the flange's `z` (the DH `d7`) |
+| flange | tool (`fk_tool`) | `0.1034` m | the same `z` |
+| tool | flange rotation | `-45` degrees | about the flange's `z` |
+
+The meshes stop at the **flange**: `link7.dae`'s vertices span `z ∈ [+0.0520, +0.1068]` in
+the link7 frame (measured with `trimesh`, an ad-hoc install), and there is no `link8`
+geometry at all. The *skeleton* instead ends at the **tool** point, since its last key
+point is the tool frame. So a marker at the tool point is attached to nothing in
+`--model mesh` and sits at the tip of the drawn stem in `--model skeleton` — and that
+10.34 cm gap is exactly what a reader notices and cannot explain. The examples therefore
+draw the flange large (it is the pose the solver solves for, and the frame their pose
+residual is measured in), the tool point small, and `swift_viz.tool_stem` between them,
+so the distance is a drawn length rather than a surprise.
+
 **Visual.** Draw the meshes and the skeleton together: the skeleton must run down the
 middle of the bodies. `_LINK_TO_FK_FRAME` takes a *thin, translucent* skeleton, or the
 capsules hide inside the meshes and the picture looks wrong when it is right.

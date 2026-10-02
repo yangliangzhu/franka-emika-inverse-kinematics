@@ -58,7 +58,11 @@ T_{\text{tool}} = T_{\text{flange}}\;\operatorname{TransZ}(0.1034)\;R_z(-\pi/4),
 ```
 
 so the conversion back is `T_flange = T_tool @ rot_z(+π/4) @ trans_z(-0.1034)`. Verified to
-5.6 × 10⁻¹⁷ against `model.fk_flange` on random configurations. Dropping the 0.1034 m term is
+5.6 × 10⁻¹⁷ against `model.fk_flange` on random configurations. The two frames are
+**0.1034 m apart along the flange's `z`**, which is exactly why the viewers draw the flange
+as the large pose marker and the tool point as a small one with the distance between them
+drawn: the meshes end at the flange, so a tool marker on its own hangs in space
+(`docs/browser_debugging.md` section 3). Dropping the 0.1034 m term is
 silent: it produces a pose that is 0.1034 m away from the intended one, and `solve` happily
 returns verified solutions *for that wrong pose* (1 solution instead of 3, and not the target
 configuration, in a spot check). Nothing in the API can detect the mistake.
