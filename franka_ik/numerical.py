@@ -36,9 +36,16 @@ __all__ = [
     "symbolic_forward_kinematics",
     "numeric_solver",
     "numerical_ik",
+    "configuration_distance",
     "CompletenessReport",
     "completeness_check",
+    "DEFAULT_SOLUTION_TOLERANCE",
 ]
+
+#: Largest entry of ``fk_flange(q) - pose`` at which an IPOPT result counts as a
+#: configuration that reaches the pose.  The optimiser itself is run far tighter
+#: (``tol`` in :data:`_SOLVER_OPTIONS`); this is the acceptance test afterwards.
+DEFAULT_SOLUTION_TOLERANCE = 1e-8
 
 #: Iteration and tolerance settings handed to IPOPT.  Tighter than the defaults
 #: because the goal is to reach a pose *exactly*, not to make progress towards it.
@@ -183,7 +190,7 @@ def numerical_ik(
     q7: float,
     starts: int = 400,
     seed: int = 0,
-    tolerance: float = 1e-8,
+    tolerance: float = DEFAULT_SOLUTION_TOLERANCE,
 ) -> List[np.ndarray]:
     """Search for every configuration reaching ``pose`` with joint 7 fixed.
 
@@ -322,8 +329,10 @@ def completeness_check(
     move a little without moving the tool -- it stops a fraction of a degree away
     from the configuration it is standing on.  A numerical solution is therefore
     counted as one of the branches when it is within ``tolerance`` of it, and only
-    a solution further than ``counter_example_tolerance`` (about 3 degrees) from
-    **every** branch is reported as a counter-example.  The full list of distances
+    a solution further than ``counter_example_tolerance`` from **every** branch is
+    reported as a counter-example.  The default is ``0.05`` deg, near the size of
+    the stopping error the optimiser shows at a singularity, so a counter-example
+    means a configuration more than a rounding error away from every branch.  The full list of distances
     is kept in :attr:`CompletenessReport.distances_deg` so the margin is visible
     rather than hidden in a tolerance.
 

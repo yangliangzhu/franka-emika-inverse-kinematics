@@ -58,6 +58,7 @@ from .model import (
     upper_limits,
 )
 from .numerical import (
+    DEFAULT_SOLUTION_TOLERANCE,
     CompletenessReport,
     completeness_check,
     numerical_ik,
@@ -125,4 +126,5 @@ __all__ = [
     "completeness_check",
     "numerical_ik",
     "symbolic_forward_kinematics",
+    "DEFAULT_SOLUTION_TOLERANCE",
 ]
