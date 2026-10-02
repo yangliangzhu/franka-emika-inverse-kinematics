@@ -125,7 +125,7 @@ def print_branches(target: np.ndarray, solutions: Sequence[IkSolution]) -> List[
     """
     print(f"\nAll branches that exist for this pose ({len(solutions)} of {NUM_BRANCHES}):")
     matches = [deviation(solution.q, target) < 1e-6 for solution in solutions]
-    for solution, match in zip(solutions, matches):
+    for solution, match in zip(solutions, matches, strict=True):
         print(f"  {solution.describe()}{'  <-- TARGET CONFIGURATION' if match else ''}")
     return matches
 
@@ -222,7 +222,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     study = study_pose(pose, q7, target=target)
     published_recovers = any(
         match and solution.q4_root == PUBLISHED_Q4_ROOT
-        for match, solution in zip(matches, solutions)
+        for match, solution in zip(matches, solutions, strict=True)
     )
     print("\nSummary from franka_ik.analysis.study_pose:")
     print(f"  distinct in-limit solutions : {study.n_distinct}")

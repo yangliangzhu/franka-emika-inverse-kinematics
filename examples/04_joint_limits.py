@@ -186,7 +186,7 @@ def build_figure(plt: Any, records: List[Dict[str, Any]]) -> Any:
     """
     joints = sorted({record["joint"] for record in records})
     figure, panels = plt.subplots(len(joints), 1, figsize=(10.0, 2.2 * len(joints)))
-    for panel, joint in zip(np.atleast_1d(panels), joints):
+    for panel, joint in zip(np.atleast_1d(panels), joints, strict=True):
         rows = [record for record in records if record["joint"] == joint]
         panel.axvspan(rows[0]["lower"], rows[0]["upper"], color="tab:green", alpha=0.18)
         panel.axhline(0.0, color="black", linewidth=1.0)

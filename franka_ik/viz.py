@@ -375,7 +375,7 @@ def plot_coverage_comparison(
     names = ["published\nfour branches", "full\neight branches"]
     values = [100.0 * report.published_rate, 100.0 * report.full_rate]
     bars = ax.bar(names, values, color=["#fdae6b", "#08519c"], width=0.55)
-    for bar, value in zip(bars, values):
+    for bar, value in zip(bars, values, strict=True):
         ax.annotate(
             f"{value:.1f} %",
             (bar.get_x() + bar.get_width() / 2.0, value),

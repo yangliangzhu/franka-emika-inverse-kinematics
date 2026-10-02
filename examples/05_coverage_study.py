@@ -187,7 +187,7 @@ def build_figure(
         [100.0 * report.published_rate, 100.0 * report.full_rate],
         color=["tab:orange", "tab:blue"],
     )
-    for bar, count in zip(bars, (report.recovered_published, report.recovered_full)):
+    for bar, count in zip(bars, (report.recovered_published, report.recovered_full), strict=True):
         right.annotate(f"{count}/{report.samples}\n{bar.get_height():.1f} %",
                        (bar.get_x() + bar.get_width() / 2.0, bar.get_height()),
                        textcoords="offset points", xytext=(0, 4), ha="center", fontsize=9)

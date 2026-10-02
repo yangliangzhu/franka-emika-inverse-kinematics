@@ -78,18 +78,21 @@ class TrackingRun:
     def joint_steps(self) -> np.ndarray:
         """Largest joint-wise change between consecutive commands, in degrees."""
         result = []
-        for previous, current in zip(self.q[:-1], self.q[1:]):
+        for previous, current in zip(self.q[:-1], self.q[1:], strict=True):
             if previous is None or current is None:
                 result.append(math.nan)
                 continue
             delta = current - previous
-            result.append(float(np.degrees(np.max(np.abs(np.arctan2(np.sin(delta),
-                                                                    np.cos(delta)))))))
+            result.append(
+                float(np.degrees(np.max(np.abs(np.arctan2(np.sin(delta), np.cos(delta))))))
+            )
         return np.asarray(result)
 
     def switches(self) -> int:
         """How often the branch label changed along the path."""
-        return sum(1 for a, b in zip(self.labels[:-1], self.labels[1:]) if a and b and a != b)
+        return sum(
+            1 for a, b in zip(self.labels[:-1], self.labels[1:], strict=True) if a and b and a != b
+        )
 
 
 def import_pyplot(headless: bool) -> Any:
@@ -164,8 +167,11 @@ def track(configurations: List[np.ndarray], use_closest: bool) -> TrackingRun:
     Returns:
         The run.
     """
-    run = TrackingRun(name="solve_closest (previous command as reference)" if use_closest
-                      else "solve(...)[0] (first solution)")
+    run = TrackingRun(
+        name="solve_closest (previous command as reference)"
+        if use_closest
+        else "solve(...)[0] (first solution)"
+    )
     previous = configurations[0].copy()
     for configuration in configurations:
         pose = fk_flange(configuration)
@@ -218,7 +224,7 @@ def build_figure(plt: Any, nearest: TrackingRun, first: TrackingRun) -> Any:
         The matplotlib figure.
     """
     figure, panels = plt.subplots(2, 2, figsize=(12.0, 7.0))
-    for panel, run in zip(panels[0], (nearest, first)):
+    for panel, run in zip(panels[0], (nearest, first), strict=True):
         trajectory = np.degrees(np.asarray([item for item in run.q if item is not None]))
         for joint in range(trajectory.shape[1]):
             panel.plot(trajectory[:, joint], label=f"q{joint + 1}")
@@ -234,7 +240,9 @@ def build_figure(plt: Any, nearest: TrackingRun, first: TrackingRun) -> Any:
     for run, colour in ((nearest, "tab:blue"), (first, "tab:red")):
         changes = run.joint_steps()
         panels[1][0].semilogy(range(1, len(changes) + 1), changes, color=colour, label=run.name)
-        panels[1][1].semilogy(range(len(run.residuals)), run.residuals, color=colour, label=run.name)
+        panels[1][1].semilogy(
+            range(len(run.residuals)), run.residuals, color=colour, label=run.name
+        )
     panels[1][0].set_xlabel("step")
     panels[1][0].set_ylabel("largest joint change [deg]")
     panels[1][0].set_title("continuity: the branch jump shows up as a spike", fontsize=9)
@@ -278,9 +286,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f"  start (deg)     : {START_DEG}")
     print(f"  end   (deg)     : {END_DEG}")
     print(f"  steps           : {args.steps}")
-    print(f"  path length     : {float(np.sum(np.linalg.norm(np.diff(positions, axis=0), axis=1))):.4f} m")
-    print(f"  joint 7 goes    : {np.degrees(configurations[0][6]):.3f} deg -> "
-          f"{np.degrees(configurations[-1][6]):.3f} deg\n")
+    print(
+        f"  path length     : {float(np.sum(np.linalg.norm(np.diff(positions, axis=0), axis=1))):.4f} m"
+    )
+    print(
+        f"  joint 7 goes    : {np.degrees(configurations[0][6]):.3f} deg -> "
+        f"{np.degrees(configurations[-1][6]):.3f} deg\n"
+    )
 
     nearest, first = track(configurations, True), track(configurations, False)
     print("Two control rules, same path:")

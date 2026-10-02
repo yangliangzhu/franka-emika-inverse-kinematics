@@ -229,7 +229,7 @@ def build_figure(
         left.plot(x_roots, np.zeros(len(x_roots)), "o", color=line.get_color(), markersize=7)
         # The positive roots of the four curves pile up near x ~ 0.5, so the
         # annotations are staggered vertically instead of overlapping.
-        for position, (x_root, angle) in enumerate(zip(x_roots, roots)):
+        for position, (x_root, angle) in enumerate(zip(x_roots, roots, strict=True)):
             offset = (0, 10 + 14 * index) if position == 0 else (0, -13 - 14 * index)
             left.annotate(f"{math.degrees(angle):.0f} deg", (x_root, 0.0), textcoords="offset points",
                           xytext=offset, ha="center", fontsize=7, color=line.get_color())
