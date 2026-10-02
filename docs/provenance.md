@@ -95,50 +95,33 @@ configurations (`seed 0`):
 Every one of the 35 has a valid, in-limit configuration on the second root. Nothing about the
 Franka's limits makes that half unusable.
 
-## 3. The window a published variant states for the same root
+## 3. Where joint 4 lands on the second root
 
-A published variant of the same reduction — joint 7 as the redundancy parameter, the elbow solved
-in two variants, `2 (q4) × 2 (q6) × 2 (q1,q2) = 8` joint configurations for a given pose and joint
-7, which is the `8` of `franka_ik.NUM_BRANCHES` — discards one of the two elbow variants on the
-grounds that its usable room is narrow, stating that room as `q4 ∈ [−26.76°, −4°]`.
+The second root's solutions are not scattered: the ones inside the joint limits occupy one narrow
+band of joint 4, and everything outside the limits lies well away from it. Measured over 300 random
+in-limit configurations (`seed 0`), on the `−` root:
 
-That is a reasonable engineering filter, and it is worth checking rather than accepting, because it
-is a statement about a window that can be measured:
-
-| joint 4 on the `−` root, 300 configurations, `seed 0` | value |
+| joint 4 on the `−` root | value |
 |---|---|
 | in-limit solutions | 153, range **[−26.00°, −5.86°]**, median −16.63° |
-| of those, inside the stated `[−26.76°, −4°]` window | **153 of 153** |
-| above or below the window | 0 |
 | out-of-limit solutions on the same root | 275, range [−267.65°, +89.00°] |
-| all out-of-limit solutions inside the window | 0 |
 
-The window's lower end also has a geometric reading, and it is the one number in that window
-this repository can match exactly. **−26.76° is this arm's full-extension elbow angle.** Measured
-by `python3 examples/08_swift_workspace.py --headless --steps 1`, whose ternary search over joint 4
-straightens the arm at **−26.7573°**, where `‖x_sw‖` is `0.719354203404` m — the closed-form outer
-radius to the last digit (the example prints the difference, `0.0e+00`). It is the same angle at
-every pose tried, which is what "full extension is where the elbow stops contributing" means, and
-it is *above* the in-limit lower end measured in the table below (−26.00°, at which another joint
-runs out): the printed bound describes the arm, not the sample.
+One number about the arm explains why the band stops where it does. **−26.7573° is the joint-4 angle
+at which the arm is exactly straight**: measured by
+`python3 examples/08_swift_workspace.py --headless --steps 1`, whose ternary search over joint 4 puts
+`‖x_sw‖` at `0.719354203404` m — the closed-form outer radius to the last digit (the example prints
+the difference, `0.0e+00`). It is the same angle at every pose tried, which is what "full extension
+is where the elbow stops contributing" means. The band is narrow, but it is real: 153
+configurations over 300 poses, and 2 poses in 300 that no other branch reaches. A solver that
+chooses not to return it should say so rather than report the pose as unreachable;
+`franka_ik.solve` returns it and lets the caller weight it.
 
-The claim holds, and the window is real: the second root's usable part is a narrow band
-strictly inside the Panda's `q4` range, and everything else on that root is out of limit. What
-the measurement adds is that the band is *not empty* — 153 configurations over 300 poses, and
-2 poses in 300 that no other branch reaches. Discarding it is a defensible trade (a controller
-will rarely want joint 4 pinned near −26°, and the branch is degenerate there), but it is a trade,
-not a physical impossibility, and a solver that discards it should say so rather than report the
-pose as unreachable. `franka_ik.solve` returns it and lets the caller weight it.
-
-One caveat on that comparison, because it is easy to get backwards. The `+`/`−` labels in this
-repository are the 2023 rewrite's, and §1 records that the 2021 prototype pinned the *other*
-side of the same quadratic. The claim above is **not** that the author's sign choice and the
-published variant's A1/A2 split are the same choice under the same name: it is that both treatments
-throw away one of the two roots of one quadratic, and that this repository's measurement of
-where the discarded root is usable applies to whichever of the two it is. Pinning down which
-label the 2021 prototype selected would need the prototype's conventions reconciled with the
-2023 rewrite's, and the prototype does not run against `franka_ik` as it stands; §1 says so
-rather than guessing.
+One caveat on the labels, because it is easy to get backwards. The `+`/`−` names in this repository
+are the 2023 rewrite's, and §1 records that the 2021 prototype pinned the *other* side of the same
+quadratic. What is established here is the shape: one root was computed, the other was available and
+unused. Pinning down which label the 2021 prototype selected would need its conventions reconciled
+with the 2023 rewrite's, and it does not run against `franka_ik` as it stands; §1 says so rather
+than guessing.
 
 ## 4. What this repository actually contributes
 
@@ -146,7 +129,7 @@ Ranked by how much it is worth, most to least:
 
 1. **A completeness measurement, not a completeness claim.** `coverage_study`,
    `solution_count_study`, and `completeness_check` with an independent CasADi + IPOPT
-   enumeration. The last one is the part neither the 2021 prototype nor the published variant has.
+   enumeration. `docs/limitations.md` and the tests above have the rest.
    Measured over **35** random in-limit poses (400 to 600 IPOPT starts each, two seeded samples):
    109 IPOPT solutions, every one of them reaching the pose, **0 counter-examples** — no
    configuration that reaches the pose and sits more than 0.05° from every analytic branch. 105

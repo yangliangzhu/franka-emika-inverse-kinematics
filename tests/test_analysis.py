@@ -243,19 +243,16 @@ def test_classify_failure_raises_on_non_finite_input() -> None:
 def test_the_limits_do_not_explain_the_discarded_elbow_root() -> None:
     """The second elbow root is not discarded by the joint limits, and is not unusable.
 
-    ``docs/provenance.md`` is where this matters: the published code takes one root
-    of the ``STEP2`` quadratic, and the natural first guess -- and the reason a
-    published variant of the same reduction gives for dropping one of its two variants
-    -- is that the other root violates the Panda's joint limits.  Measured over 300
+    ``docs/provenance.md`` is where this matters: the published code takes one root of
+    the ``STEP2`` quadratic, and the natural first guess at why the other was left out
+    is that it violates the Panda's joint limits.  Measured over 300
     in-limit configurations at ``seed 0``, it does not.  Every one of the 35
     configurations that sit on the second root has an in-limit solution there, and
     for 2 of them that root is the only way to reach the pose at all.
 
-    The same sample also pins the one number in ``docs/provenance.md`` §3 that
-    speaks to the published reasoning: **all 153** in-limit solutions on the second
-    root have joint 4 inside the band a published variant of the same reduction
-    quotes for the variant it discards, ``[-26.76, -4]`` deg.  Both accounts agree
-    about the window; they disagree about whether it is empty.
+    The same sample pins where joint 4 lands on that root: the 153 in-limit solutions
+    occupy ``[-26.00, -5.86]`` degrees, one narrow band, while the 275 that violate
+    some joint are spread from ``-267.65`` to ``+89.00`` degrees.
     """
     lower, upper = model.lower_limits(), model.upper_limits()
     rng = np.random.default_rng(0)
@@ -301,8 +298,9 @@ def test_the_limits_do_not_explain_the_discarded_elbow_root() -> None:
     assert published_reports_it_unreachable == 2
     assert len(in_limit_q4) == 153
     assert len(out_of_limit_q4) == 275
-    assert min(in_limit_q4) >= -26.76
-    assert max(in_limit_q4) <= -4.0
+    # The band itself, as measured here: [-26.00, -5.86] degrees.
+    assert min(in_limit_q4) >= -26.0 - 1e-2
+    assert max(in_limit_q4) <= -5.86 + 1e-2
     # The 275 out-of-limit solutions are *not* checked for a joint-4 window: they
     # violate some joint of the arm, and joint 4 is only sometimes the one that is
     # out of range.  Their distribution is in the study's JSON instead.

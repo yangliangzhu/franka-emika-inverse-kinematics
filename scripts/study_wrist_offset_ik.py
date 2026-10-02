@@ -26,9 +26,8 @@ Four measurements, all on the same seeded sample of in-limit configurations:
 
 ``q4``
     The histogram of joint 4 on the second root, split by whether the solution is
-    inside the Panda's range.  This is the measurement that lets the repository say
-    something precise about a published variant of the same reduction, which discards
-    one of the second root's two variants as impractical on a Franka.
+    inside the Panda's range.  The band the in-limit solutions occupy, and how far away
+    the out-of-limit ones are, are both printed.
 
 ``optimiser``
     Optional (``--optimiser``): an independent CasADi + IPOPT enumeration, used
@@ -76,12 +75,6 @@ LOGGER = logging.getLogger("study_wrist_offset_ik")
 #: configurations are compared: whole turns are identified, see
 #: :func:`franka_ik.solver.solve`.
 _TURN_DEG = 360.0
-
-#: Joint-4 window that a published variant of the same reduction quotes for the elbow
-#: variant it discards -- ``q4 in [-26.76, -4] deg``, which it states as too narrow to
-#: use.  Quoted, not derived here; the measurement below is what that window actually
-#: contains.
-PUBLISHED_ELBOW_WINDOW_DEG = (-26.76, -4.0)
 
 
 def sample_configurations(samples: int, seed: int) -> np.ndarray:
@@ -194,7 +187,6 @@ def study_q4(samples: int, seed: int) -> Dict[str, Any]:
             if s.q4_root == analysis.PUBLISHED_Q4_ROOT:
                 continue
             (inside if _inside_limits(s.q) else outside).append(float(np.degrees(s.q[3])))
-    low, high = PUBLISHED_ELBOW_WINDOW_DEG
 
     def summary(values: List[float]) -> Dict[str, Any]:
         if not values:
@@ -207,21 +199,11 @@ def study_q4(samples: int, seed: int) -> Dict[str, Any]:
             "max_deg": float(array.max()),
         }
 
-    in_window = [v for v in inside if low <= v <= high]
-    above_window = [v for v in inside if v > high]
-    below_window = [v for v in inside if v < low]
     return {
         "samples": samples,
         "seed": seed,
-        "published_elbow_window_deg": [low, high],
         "minus_root_q4_in_limit": summary(inside),
         "minus_root_q4_out_of_limit": summary(outside),
-        "in_limit_solutions_within_the_published_window": len(in_window),
-        "in_limit_solutions_above_the_window": len(above_window),
-        "in_limit_solutions_below_the_window": len(below_window),
-        "share_of_in_limit_minus_root_inside_the_window": (
-            len(in_window) / float(len(inside)) if inside else None
-        ),
     }
 
 
@@ -402,7 +384,6 @@ def report(result: Dict[str, Any]) -> None:
     print()
 
     q4 = result["q4"]
-    low, high = q4["published_elbow_window_deg"]
     panda_low, panda_high = LOWER_LIMITS_DEG[3], UPPER_LIMITS_DEG[3]
     print(
         "joint 4 on the '-' root "
@@ -420,14 +401,6 @@ def report(result: Dict[str, Any]) -> None:
             )
         else:
             print(f"  {label:>13}: none")
-    print(
-        f"  in-limit '-' root solutions inside the published window [{low}, {high}] deg: "
-        f"{q4['in_limit_solutions_within_the_published_window']}"
-    )
-    print(
-        f"  outside that window: above {q4['in_limit_solutions_above_the_window']}, "
-        f"below {q4['in_limit_solutions_below_the_window']}"
-    )
     print()
 
 

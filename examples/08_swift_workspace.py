@@ -19,8 +19,8 @@ line prints the difference: ``0.0e+00``).
 
 That angle is a property of the **arm**, not of the pose -- measured ``-26.7573``
 degrees for every pose tried, because full extension is where the elbow stops
-contributing -- and it is, to the two decimals the paper prints, the lower end of its
-Case A1 ``q4`` window of ``[-26.76, -4]`` degrees (``docs/provenance.md``).
+contributing -- and it is where the in-limit band of the second elbow root begins
+(`docs/provenance.md` section 3).
 
 Two things are worth looking at, and both are measured rather than asserted:
 
@@ -123,8 +123,8 @@ def elbow_sweep(
 
     The angle is a property of the **arm**, not of the pose: measured ``−26.7573``
     degrees for every pose tried, because full extension is where the elbow stops
-    contributing.  It is also, to the two decimals the paper prints, the lower end of
-    its Case A1 ``q4`` window (``docs/provenance.md``).
+    contributing.  It is where the in-limit band of the second elbow root begins
+    (``docs/provenance.md`` section 3).
 
     Args:
         q0: The configuration to hold every other joint at, radians.
